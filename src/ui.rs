@@ -260,6 +260,7 @@ fn compute_view_internal(
                 app.tab_scroll,
                 app.tab_scroll_follow_active,
                 app.mouse_capture,
+                app.show_tab_bar_new_tab_button,
                 &app.terminals,
                 terminal_runtimes,
             )
@@ -768,6 +769,8 @@ mod tests {
         assert_eq!(app.view.terminal_area, Rect::new(26, 1, 54, 19));
         assert_eq!(app.view.tab_hit_areas.len(), 2);
         assert!(app.view.tab_hit_areas.iter().all(|rect| rect.width > 0));
+        app.show_tab_bar_new_tab_button = true;
+        compute_view(&mut app, Rect::new(0, 0, 80, 20));
         assert!(app.view.new_tab_hit_area.width > 0);
 
         assert!(app.workspaces[0].close_tab(1));
@@ -1017,7 +1020,6 @@ mod tests {
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
         assert_eq!(auto_style.fg, Some(app.palette.tab_inactive_fg));
-        assert_eq!(custom_style.bg, Some(app.palette.panel_bg));
         assert_eq!(custom_style.fg, Some(app.palette.tab_active_fg));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
         assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
@@ -1046,7 +1048,6 @@ mod tests {
         let custom_rect = app.view.tab_hit_areas[1];
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
-        assert_eq!(custom_style.bg, Some(Color::Reset));
         assert_eq!(custom_style.fg, Some(app.palette.tab_active_fg));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
         assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
@@ -1058,6 +1059,7 @@ mod tests {
         let mut ws = Workspace::test_new("test");
         ws.test_add_tab(Some("logs"));
 
+        app.show_tab_bar_new_tab_button = true;
         app.workspaces = vec![ws];
         app.active = Some(0);
         app.selected = 0;
@@ -1094,6 +1096,7 @@ mod tests {
         app.mode = Mode::Terminal;
         app.tab_scroll_follow_active = false;
         app.tab_scroll = 2;
+        app.show_tab_bar_new_tab_button = true;
 
         compute_view(&mut app, Rect::new(0, 0, 65, 20));
 

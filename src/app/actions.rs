@@ -1501,6 +1501,7 @@ impl AppState {
             self.tab_scroll,
             self.tab_scroll_follow_active,
             self.mouse_capture,
+            self.show_tab_bar_new_tab_button,
             &self.terminals,
             &empty_runtimes,
         );

@@ -154,6 +154,7 @@ pub(crate) fn compute_tab_bar_view(
     current_scroll: usize,
     follow_active: bool,
     mouse_chrome: bool,
+    show_new_tab_button: bool,
     terminals: &std::collections::HashMap<
         crate::terminal::TerminalId,
         crate::terminal::TerminalState,
@@ -181,22 +182,31 @@ pub(crate) fn compute_tab_bar_view(
     }
 
     let area_right = area.x + area.width;
+    let new_tab_reserved = if show_new_tab_button {
+        NEW_TAB_WIDTH
+    } else {
+        0
+    };
     let all_tabs_area = Rect::new(
         area.x,
         area.y,
-        area.width.saturating_sub(NEW_TAB_WIDTH),
+        area.width.saturating_sub(new_tab_reserved),
         area.height,
     );
     let all_tabs = layout_tab_hit_areas(ws, all_tabs_area, 0, terminals, terminal_runtimes);
     let overflow = all_tabs.iter().any(|rect| rect.width == 0);
     if !overflow {
-        let new_tab_x = trailing_tab_controls_x(&all_tabs, area.x);
-        let new_tab_hit_area = Rect::new(
-            new_tab_x,
-            area.y,
-            area_right.saturating_sub(new_tab_x).min(NEW_TAB_WIDTH),
-            1,
-        );
+        let new_tab_hit_area = if show_new_tab_button {
+            let new_tab_x = trailing_tab_controls_x(&all_tabs, area.x);
+            Rect::new(
+                new_tab_x,
+                area.y,
+                area_right.saturating_sub(new_tab_x).min(NEW_TAB_WIDTH),
+                1,
+            )
+        } else {
+            Rect::default()
+        };
         return TabBarView {
             scroll: 0,
             tab_hit_areas: all_tabs,
@@ -208,7 +218,7 @@ pub(crate) fn compute_tab_bar_view(
 
     let left_hit_area = Rect::new(area.x, area.y, TAB_SCROLL_BUTTON_WIDTH.min(area.width), 1);
     let tab_area_x = left_hit_area.x + left_hit_area.width;
-    let reserved_trailing_width = NEW_TAB_WIDTH.saturating_add(TAB_SCROLL_BUTTON_WIDTH);
+    let reserved_trailing_width = new_tab_reserved.saturating_add(TAB_SCROLL_BUTTON_WIDTH);
     let tab_area_right = area_right.saturating_sub(reserved_trailing_width);
     let tab_area = Rect::new(
         tab_area_x,
@@ -233,13 +243,17 @@ pub(crate) fn compute_tab_bar_view(
             .min(TAB_SCROLL_BUTTON_WIDTH),
         1,
     );
-    let new_tab_x = right_hit_area.x + right_hit_area.width;
-    let new_tab_hit_area = Rect::new(
-        new_tab_x,
-        area.y,
-        area_right.saturating_sub(new_tab_x).min(NEW_TAB_WIDTH),
-        1,
-    );
+    let new_tab_hit_area = if show_new_tab_button {
+        let new_tab_x = right_hit_area.x + right_hit_area.width;
+        Rect::new(
+            new_tab_x,
+            area.y,
+            area_right.saturating_sub(new_tab_x).min(NEW_TAB_WIDTH),
+            1,
+        )
+    } else {
+        Rect::default()
+    };
 
     TabBarView {
         scroll,
@@ -310,11 +324,6 @@ pub(super) fn render_tab_bar(
     };
     let p = &app.palette;
 
-    frame.render_widget(
-        Paragraph::new(" ".repeat(area.width as usize)).style(Style::default().bg(p.panel_bg)),
-        area,
-    );
-
     let first_visible_idx = app
         .view
         .tab_hit_areas
@@ -372,14 +381,12 @@ pub(super) fn render_tab_bar(
             continue;
         }
         let active = idx == ws.active_tab;
-        let bar_bg = p.panel_bg;
         let style = if active {
             Style::default()
                 .fg(p.tab_active_fg)
-                .bg(bar_bg)
                 .add_modifier(Modifier::BOLD | Modifier::ITALIC)
         } else {
-            Style::default().fg(p.tab_inactive_fg).bg(bar_bg)
+            Style::default().fg(p.tab_inactive_fg)
         };
         let width = rect.width as usize;
         let name = tab_chrome_label(ws, idx, &app.terminals, terminal_runtimes);
@@ -403,13 +410,6 @@ pub(super) fn render_tab_bar(
                     .set_style(Style::default().fg(p.accent));
             }
         }
-    }
-
-    if app.mouse_capture && app.view.new_tab_hit_area.width > 0 {
-        frame.render_widget(
-            Paragraph::new(" + ").style(Style::default().fg(p.overlay1)),
-            app.view.new_tab_hit_area,
-        );
     }
 
     if first_visible_idx.is_some_and(|idx| idx > 0) {
@@ -471,6 +471,7 @@ mod tests {
             0,
             true,
             false,
+            false,
             &app.terminals,
             &runtimes,
         );
@@ -506,6 +507,7 @@ mod tests {
             0,
             true,
             false,
+            false,
             &app.terminals,
             &runtimes,
         );
@@ -520,7 +522,6 @@ mod tests {
         let tab_rect = app.view.tab_hit_areas[0];
         let style = terminal.backend().buffer()[(tab_rect.x + 1, tab_rect.y)].style();
 
-        assert_eq!(style.bg, Some(app.palette.panel_bg));
         assert_eq!(style.fg, Some(app.palette.tab_active_fg));
         assert!(style.add_modifier.contains(Modifier::BOLD));
         assert!(style.add_modifier.contains(Modifier::ITALIC));
@@ -565,6 +566,7 @@ mod tests {
             app.view.tab_bar_rect,
             0,
             true,
+            false,
             false,
             &app.terminals,
             &runtimes,

@@ -818,6 +818,8 @@ pub struct UiConfig {
     pub show_agent_labels_on_pane_borders: bool,
     /// Hide the tab row when the workspace has one tab. Default: false.
     pub hide_tab_bar_when_single_tab: bool,
+    /// Show the trailing "+" mouse button on the tab bar. Default: true.
+    pub show_tab_bar_new_tab_button: bool,
     /// Agent sidebar ordering. Saved values are "spaces" or "priority". Default: "spaces".
     pub agent_panel_sort: AgentPanelSortConfig,
     /// Accent color for highlights, borders, and navigation UI.
@@ -1013,6 +1015,7 @@ impl Default for UiConfig {
             pane_gaps: true,
             show_agent_labels_on_pane_borders: false,
             hide_tab_bar_when_single_tab: false,
+            show_tab_bar_new_tab_button: true,
             agent_panel_sort: AgentPanelSortConfig::Spaces,
             accent: "cyan".into(),
             toast: ToastConfig::default(),
