@@ -90,6 +90,10 @@ pub struct Palette {
     pub teal: Color,
     /// Interrupted / warning states.
     pub peach: Color,
+    /// Tab bar active label (foreground-only chrome).
+    pub tab_active_fg: Color,
+    /// Tab bar inactive labels.
+    pub tab_inactive_fg: Color,
 }
 
 impl Palette {
@@ -112,6 +116,8 @@ impl Palette {
             blue: Color::Rgb(137, 180, 250),
             teal: Color::Rgb(148, 226, 213),
             peach: Color::Rgb(250, 179, 135),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -134,6 +140,8 @@ impl Palette {
             blue: Color::Rgb(30, 102, 245),
             teal: Color::Rgb(23, 146, 153),
             peach: Color::Rgb(254, 100, 11),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -156,6 +164,8 @@ impl Palette {
             blue: Color::Blue,
             teal: Color::Cyan,
             peach: Color::Yellow,
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -178,6 +188,8 @@ impl Palette {
             blue: Color::Rgb(122, 162, 247),
             teal: Color::Rgb(125, 207, 255),
             peach: Color::Rgb(255, 158, 100),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -200,6 +212,8 @@ impl Palette {
             blue: Color::Rgb(46, 125, 233),
             teal: Color::Rgb(17, 140, 116),
             peach: Color::Rgb(177, 92, 0),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -222,6 +236,8 @@ impl Palette {
             blue: Color::Rgb(139, 233, 253), // cyan-ish
             teal: Color::Rgb(139, 233, 253),
             peach: Color::Rgb(255, 184, 108),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -244,6 +260,8 @@ impl Palette {
             blue: Color::Rgb(129, 161, 193),
             teal: Color::Rgb(143, 188, 187),
             peach: Color::Rgb(208, 135, 112),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -266,6 +284,8 @@ impl Palette {
             blue: Color::Rgb(131, 165, 152),
             teal: Color::Rgb(142, 192, 124),
             peach: Color::Rgb(254, 128, 25),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -288,6 +308,8 @@ impl Palette {
             blue: Color::Rgb(7, 102, 120),
             teal: Color::Rgb(66, 123, 88),
             peach: Color::Rgb(175, 58, 3),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -310,6 +332,8 @@ impl Palette {
             blue: Color::Rgb(97, 175, 239),
             teal: Color::Rgb(86, 182, 194),
             peach: Color::Rgb(209, 154, 102),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -332,6 +356,8 @@ impl Palette {
             blue: Color::Rgb(64, 120, 242),
             teal: Color::Rgb(1, 132, 188),
             peach: Color::Rgb(152, 104, 1),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -354,6 +380,8 @@ impl Palette {
             blue: Color::Rgb(38, 139, 210),
             teal: Color::Rgb(42, 161, 152),
             peach: Color::Rgb(203, 75, 22),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -376,6 +404,8 @@ impl Palette {
             blue: Color::Rgb(38, 139, 210),
             teal: Color::Rgb(42, 161, 152),
             peach: Color::Rgb(203, 75, 22),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -398,6 +428,8 @@ impl Palette {
             blue: Color::Rgb(126, 156, 216),
             teal: Color::Rgb(127, 180, 202),
             peach: Color::Rgb(255, 160, 102),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -420,6 +452,8 @@ impl Palette {
             blue: Color::Rgb(77, 105, 155),
             teal: Color::Rgb(78, 140, 162),
             peach: Color::Rgb(204, 109, 0),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -442,6 +476,8 @@ impl Palette {
             blue: Color::Rgb(49, 116, 143),    // pine
             teal: Color::Rgb(156, 207, 216),   // foam
             peach: Color::Rgb(234, 154, 151),  // rose
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -464,6 +500,8 @@ impl Palette {
             blue: Color::Rgb(40, 105, 131),
             teal: Color::Rgb(86, 148, 159),
             peach: Color::Rgb(215, 130, 126),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -486,6 +524,8 @@ impl Palette {
             blue: Color::Rgb(176, 176, 176),
             teal: Color::Rgb(102, 221, 204),
             peach: Color::Rgb(255, 199, 153),
+            tab_active_fg: Color::Rgb(255, 2, 128),
+            tab_inactive_fg: Color::Rgb(0, 0, 0),
         }
     }
 
@@ -564,6 +604,12 @@ impl Palette {
         }
         if let Some(c) = &custom.peach {
             self.peach = parse_color(c);
+        }
+        if let Some(c) = &custom.tab_active_fg {
+            self.tab_active_fg = parse_color(c);
+        }
+        if let Some(c) = &custom.tab_inactive_fg {
+            self.tab_inactive_fg = parse_color(c);
         }
         self
     }

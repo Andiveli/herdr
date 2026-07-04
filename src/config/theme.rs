@@ -46,6 +46,10 @@ pub struct CustomThemeColors {
     pub blue: Option<String>,
     pub teal: Option<String>,
     pub peach: Option<String>,
+    /// Tab bar: active tab label (Zellij zjstatus `tab_active` fg).
+    pub tab_active_fg: Option<String>,
+    /// Tab bar: inactive tab labels (Zellij zjstatus `tab_normal` fg).
+    pub tab_inactive_fg: Option<String>,
 }
 
 /// Parse a color string into a ratatui Color.

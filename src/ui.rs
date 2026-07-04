@@ -1016,9 +1016,9 @@ mod tests {
         let auto_style = buffer[(auto_rect.x + 1, auto_rect.y)].style();
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
-        assert_eq!(auto_style.fg, Some(crate::config::parse_color("#6c7086")));
+        assert_eq!(auto_style.fg, Some(app.palette.tab_inactive_fg));
         assert_eq!(custom_style.bg, Some(app.palette.panel_bg));
-        assert_eq!(custom_style.fg, Some(crate::config::parse_color("#ff0280")));
+        assert_eq!(custom_style.fg, Some(app.palette.tab_active_fg));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
         assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
     }
@@ -1047,7 +1047,7 @@ mod tests {
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
         assert_eq!(custom_style.bg, Some(Color::Reset));
-        assert_eq!(custom_style.fg, Some(crate::config::parse_color("#ff0280")));
+        assert_eq!(custom_style.fg, Some(app.palette.tab_active_fg));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
         assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
     }

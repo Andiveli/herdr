@@ -7,7 +7,6 @@ use ratatui::{
 
 use super::text::display_width_u16;
 use crate::app::AppState;
-use crate::config::parse_color;
 use crate::terminal::TerminalRuntimeRegistry;
 
 const MIN_TAB_WIDTH: u16 = 8;
@@ -22,10 +21,6 @@ pub(crate) struct TabBarView {
     pub scroll_right_hit_area: Rect,
     pub new_tab_hit_area: Rect,
 }
-
-/// Zellij-style tab chrome: foreground only on the bar background (no accent pill).
-const TAB_ACTIVE_FG_HEX: &str = "#ff0280";
-const TAB_INACTIVE_FG_HEX: &str = "#6c7086";
 
 fn tab_chrome_label(
     ws: &crate::workspace::Workspace,
@@ -380,13 +375,11 @@ pub(super) fn render_tab_bar(
         let bar_bg = p.panel_bg;
         let style = if active {
             Style::default()
-                .fg(parse_color(TAB_ACTIVE_FG_HEX))
+                .fg(p.tab_active_fg)
                 .bg(bar_bg)
                 .add_modifier(Modifier::BOLD | Modifier::ITALIC)
         } else {
-            Style::default()
-                .fg(parse_color(TAB_INACTIVE_FG_HEX))
-                .bg(bar_bg)
+            Style::default().fg(p.tab_inactive_fg).bg(bar_bg)
         };
         let width = rect.width as usize;
         let name = tab_chrome_label(ws, idx, &app.terminals, terminal_runtimes);
@@ -528,7 +521,7 @@ mod tests {
         let style = terminal.backend().buffer()[(tab_rect.x + 1, tab_rect.y)].style();
 
         assert_eq!(style.bg, Some(app.palette.panel_bg));
-        assert_eq!(style.fg, Some(parse_color(TAB_ACTIVE_FG_HEX)));
+        assert_eq!(style.fg, Some(app.palette.tab_active_fg));
         assert!(style.add_modifier.contains(Modifier::BOLD));
         assert!(style.add_modifier.contains(Modifier::ITALIC));
     }
