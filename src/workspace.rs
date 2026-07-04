@@ -426,13 +426,30 @@ impl Workspace {
         self.tab_display_name(self.active_tab)
     }
 
+    pub fn active_tab_display_name_from(
+        &self,
+        terminals: &HashMap<TerminalId, TerminalState>,
+        terminal_runtimes: &TerminalRuntimeRegistry,
+    ) -> Option<String> {
+        self.tab_display_name_from(self.active_tab, terminals, terminal_runtimes)
+    }
+
     pub fn tab_display_name(&self, tab_idx: usize) -> Option<String> {
-        let tab = self.tabs.get(tab_idx)?;
-        Some(
-            tab.custom_name
-                .clone()
-                .unwrap_or_else(|| (tab_idx + 1).to_string()),
+        self.tab_display_name_from(
+            tab_idx,
+            &HashMap::new(),
+            &TerminalRuntimeRegistry::default(),
         )
+    }
+
+    pub fn tab_display_name_from(
+        &self,
+        tab_idx: usize,
+        terminals: &HashMap<TerminalId, TerminalState>,
+        terminal_runtimes: &TerminalRuntimeRegistry,
+    ) -> Option<String> {
+        let tab = self.tabs.get(tab_idx)?;
+        Some(tab.display_chrome_label(tab_idx, terminals, terminal_runtimes))
     }
 
     pub fn switch_tab(&mut self, idx: usize) {

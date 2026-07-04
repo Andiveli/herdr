@@ -373,7 +373,10 @@ impl AppState {
         let ws_idx = self.collapsed_detail_workspace_idx()?;
         let ws = self.workspaces.get(ws_idx)?;
         let detail_idx = (row - detail_content_area.y) as usize;
-        let details = ws.pane_details(&self.terminals);
+        let details = ws.pane_details(
+            &self.terminals,
+            &crate::terminal::TerminalRuntimeRegistry::new(),
+        );
         let detail = details.get(detail_idx)?;
         Some((ws_idx, detail.tab_idx, detail.pane_id))
     }

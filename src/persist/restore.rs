@@ -1405,7 +1405,7 @@ mod tests {
         let workspace = workspaces.first().expect("workspace should restore");
         let agent_pane = workspace.tabs[3].root_pane;
         let detail = workspace
-            .pane_details(&terminals)
+            .pane_details(&terminals, &crate::terminal::TerminalRuntimeRegistry::new())
             .into_iter()
             .find(|detail| detail.pane_id == agent_pane)
             .expect("restored agent pane should be listed");

@@ -1494,12 +1494,15 @@ impl AppState {
             return;
         };
 
+        let empty_runtimes = crate::terminal::TerminalRuntimeRegistry::new();
         let layout = crate::ui::compute_tab_bar_view(
             ws,
             area,
             self.tab_scroll,
             self.tab_scroll_follow_active,
             self.mouse_capture,
+            &self.terminals,
+            &empty_runtimes,
         );
         self.tab_scroll = layout.scroll;
         self.view.tab_hit_areas = layout.tab_hit_areas;

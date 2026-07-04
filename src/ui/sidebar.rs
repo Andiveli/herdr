@@ -123,7 +123,7 @@ fn agent_panel_entries_with_runtimes(
         .flat_map(|(ws_idx, ws)| {
             let multi_tab = ws.tabs.len() > 1;
             let workspace_label = ws.display_name_from(&app.terminals, terminal_runtimes);
-            ws.pane_details(&app.terminals)
+            ws.pane_details(&app.terminals, terminal_runtimes)
                 .into_iter()
                 .map(move |detail| AgentPanelEntry {
                     ws_idx,
@@ -724,7 +724,12 @@ pub(super) fn render_sidebar_collapsed(app: &AppState, frame: &mut Frame, area: 
     if detail_content_area != Rect::default() {
         if let Some(ws_idx) = detail_ws_idx {
             if let Some(ws) = app.workspaces.get(ws_idx) {
-                for (detail_idx, detail) in ws.pane_details(&app.terminals).iter().enumerate() {
+                let empty_runtimes = TerminalRuntimeRegistry::new();
+                for (detail_idx, detail) in ws
+                    .pane_details(&app.terminals, &empty_runtimes)
+                    .iter()
+                    .enumerate()
+                {
                     let y = detail_content_area.y + detail_idx as u16;
                     if y >= detail_content_area.y + detail_content_area.height {
                         break;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::detect::{Agent, AgentState};
 use crate::layout::PaneId;
-use crate::terminal::{TerminalId, TerminalState};
+use crate::terminal::{TerminalId, TerminalRuntimeRegistry, TerminalState};
 
 use super::{Tab, Workspace};
 
@@ -101,14 +101,18 @@ impl Workspace {
         self.tabs.iter().any(|tab| tab.has_working_pane(terminals))
     }
 
-    pub fn pane_details(&self, terminals: &HashMap<TerminalId, TerminalState>) -> Vec<PaneDetail> {
+    pub fn pane_details(
+        &self,
+        terminals: &HashMap<TerminalId, TerminalState>,
+        terminal_runtimes: &TerminalRuntimeRegistry,
+    ) -> Vec<PaneDetail> {
         let multi_tab = self.tabs.len() > 1;
         self.tabs
             .iter()
             .enumerate()
             .flat_map(|(tab_idx, tab)| {
                 let tab_label = self
-                    .tab_display_name(tab_idx)
+                    .tab_display_name_from(tab_idx, terminals, terminal_runtimes)
                     .unwrap_or_else(|| (tab_idx + 1).to_string());
                 tab.pane_details(terminals, tab_idx, &tab_label).into_iter()
             })
@@ -205,8 +209,9 @@ mod tests {
         terminal.set_agent_name("planner".into());
         terminals.insert(terminal.id.clone(), terminal);
 
+        let runtimes = TerminalRuntimeRegistry::new();
         let labels: Vec<_> = ws
-            .pane_details(&terminals)
+            .pane_details(&terminals, &runtimes)
             .into_iter()
             .map(|detail| (detail.label, detail.agent_label, detail.agent))
             .collect();
@@ -244,8 +249,9 @@ mod tests {
         );
         terminals.insert(review_terminal.id.clone(), review_terminal);
 
+        let runtimes = TerminalRuntimeRegistry::new();
         let labels: Vec<_> = ws
-            .pane_details(&terminals)
+            .pane_details(&terminals, &runtimes)
             .into_iter()
             .map(|detail| (detail.label, detail.agent_label, detail.agent))
             .collect();
@@ -272,7 +278,7 @@ mod tests {
         terminal.detected_agent = Some(Agent::Codex);
         terminals.insert(terminal.id.clone(), terminal);
 
-        let details = ws.pane_details(&terminals);
+        let details = ws.pane_details(&terminals, &TerminalRuntimeRegistry::new());
         let survivor = details
             .iter()
             .find(|detail| detail.pane_id == survivor_pane)

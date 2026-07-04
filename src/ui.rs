@@ -260,6 +260,8 @@ fn compute_view_internal(
                 app.tab_scroll,
                 app.tab_scroll_follow_active,
                 app.mouse_capture,
+                &app.terminals,
+                terminal_runtimes,
             )
         })
         .unwrap_or_default();
@@ -415,7 +417,7 @@ pub fn render_with_runtime_registry(
         }
     }
     if app.view.layout != ViewLayout::Mobile {
-        render_tab_bar(app, frame, tab_bar_area);
+        render_tab_bar(app, terminal_runtimes, frame, tab_bar_area);
     }
     render_panes(app, terminal_runtimes, frame, terminal_area);
 
@@ -1014,10 +1016,11 @@ mod tests {
         let auto_style = buffer[(auto_rect.x + 1, auto_rect.y)].style();
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
-        assert_eq!(auto_style.fg, Some(app.palette.overlay0));
-        assert!(auto_style.add_modifier.contains(Modifier::DIM));
-        assert_eq!(custom_style.fg, Some(app.palette.panel_bg));
+        assert_eq!(auto_style.fg, Some(crate::config::parse_color("#6c7086")));
+        assert_eq!(custom_style.bg, Some(app.palette.panel_bg));
+        assert_eq!(custom_style.fg, Some(crate::config::parse_color("#ff0280")));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
+        assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
     }
 
     #[test]
@@ -1043,9 +1046,10 @@ mod tests {
         let custom_rect = app.view.tab_hit_areas[1];
         let custom_style = buffer[(custom_rect.x + 1, custom_rect.y)].style();
 
-        assert_eq!(custom_style.bg, Some(app.palette.accent));
-        assert_eq!(custom_style.fg, Some(app.palette.surface_dim));
+        assert_eq!(custom_style.bg, Some(Color::Reset));
+        assert_eq!(custom_style.fg, Some(crate::config::parse_color("#ff0280")));
         assert!(custom_style.add_modifier.contains(Modifier::BOLD));
+        assert!(custom_style.add_modifier.contains(Modifier::ITALIC));
     }
 
     #[test]
