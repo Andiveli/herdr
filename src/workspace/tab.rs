@@ -205,7 +205,26 @@ impl Tab {
         self.custom_name = Some(name);
     }
 
-    #[cfg(test)]
+    pub fn display_chrome_label(
+        &self,
+        tab_idx: usize,
+        terminals: &HashMap<TerminalId, TerminalState>,
+        terminal_runtimes: &TerminalRuntimeRegistry,
+    ) -> String {
+        if let Some(name) = &self.custom_name {
+            return name.clone();
+        }
+        let pane_id = self.layout.focused();
+        if let Some(cwd) = self.cwd_for_pane(pane_id, terminals, terminal_runtimes) {
+            return super::derive_label_from_cwd(&cwd);
+        }
+        if let Some(cwd) = self.cwd_for_pane(self.root_pane, terminals, terminal_runtimes) {
+            return super::derive_label_from_cwd(&cwd);
+        }
+        (tab_idx + 1).to_string()
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn split_focused(
         &mut self,
         direction: Direction,

@@ -196,6 +196,21 @@ test("reports child prompts without replacing the root session", async () => {
   ]);
 });
 
+test("projects a child prompt as working without replacing the root session", async () => {
+  const plugin = await loadPlugin();
+
+  await plugin.event({
+    event: {
+      type: "session.created",
+      properties: { sessionID: "child-session", info: { id: "child-session", parentID: "root-session" } },
+    },
+  });
+  await plugin["chat.message"]({ sessionID: "child-session" });
+
+  expect(requests.map(requestState)).toEqual(["working"]);
+  expect(requestSessionID(requests[0])).toBeUndefined();
+});
+
 function requestMethod(request: unknown): unknown {
   return isRecord(request) ? request.method : undefined;
 }

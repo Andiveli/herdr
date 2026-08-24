@@ -154,8 +154,110 @@ impl App {
             return;
         }
 
-        if let Some(action) = navigate_reserved_action_for_key(&self.state, &raw_key) {
+        if let Some(digit) = ('1'..='9').find(|digit| {
+            crate::config::terminal_key_matches_combo(
+                &raw_key,
+                (
+                    KeyCode::Char(*digit),
+                    crossterm::event::KeyModifiers::empty(),
+                ),
+            )
+        }) {
+            if let Some(ws_idx) = self
+                .state
+                .workspace_at_visible_position((digit as usize).saturating_sub('1' as usize))
+            {
+                self.focus_workspace_idx_via_api(ws_idx);
+                leave_navigate_mode(&mut self.state);
+            }
+            self.selection_autoscroll_deadline = None;
+            return;
+        }
+
+        if crate::config::normalize_key_combo((raw_key.code, raw_key.modifiers))
+            == (KeyCode::Enter, crossterm::event::KeyModifiers::empty())
+        {
+            if self.state.selected < self.state.workspaces.len() {
+                self.focus_workspace_idx_via_api(self.state.selected);
+                leave_navigate_mode(&mut self.state);
+            }
+            self.selection_autoscroll_deadline = None;
+            return;
+        }
+
+        let (code, modifiers) =
+            crate::config::normalize_key_combo((raw_key.code, raw_key.modifiers));
+        if modifiers.is_empty() {
+            match code {
+                KeyCode::Tab => {
+                    self.cycle_pane_via_api(false);
+                    return;
+                }
+                KeyCode::BackTab => {
+                    self.cycle_pane_via_api(true);
+                    return;
+                }
+                KeyCode::Left => {
+                    self.focus_pane_direction_in_context(
+                        NavDirection::Left,
+                        ActionContext::Navigate,
+                    );
+                    return;
+                }
+                KeyCode::Right => {
+                    self.focus_pane_direction_in_context(
+                        NavDirection::Right,
+                        ActionContext::Navigate,
+                    );
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        let direction = if self
+            .state
+            .keybinds
+            .navigate
+            .pane_left
+            .matches_direct_key(&raw_key)
+        {
+            Some(NavDirection::Left)
+        } else if self
+            .state
+            .keybinds
+            .navigate
+            .pane_down
+            .matches_direct_key(&raw_key)
+        {
+            Some(NavDirection::Down)
+        } else if self
+            .state
+            .keybinds
+            .navigate
+            .pane_up
+            .matches_direct_key(&raw_key)
+        {
+            Some(NavDirection::Up)
+        } else if self
+            .state
+            .keybinds
+            .navigate
+            .pane_right
+            .matches_direct_key(&raw_key)
+        {
+            Some(NavDirection::Right)
+        } else {
+            None
+        };
+        if let Some(direction) = direction {
+            self.focus_pane_direction_in_context(direction, ActionContext::Navigate);
+            return;
+        }
+
+        if let Some(action) = navigate_mode_direct_pane_action(&self.state, &raw_key) {
             self.execute_tui_navigate_action(action, ActionContext::Navigate);
+            self.selection_autoscroll_deadline = None;
             return;
         }
 
@@ -358,6 +460,14 @@ impl App {
             }
             NavigateAction::FocusPaneRight => {
                 self.focus_pane_direction_in_context(NavDirection::Right, context)
+            }
+            NavigateAction::FocusPaneOrTabLeft => {
+                self.focus_pane_or_tab_horizontal_via_api(NavDirection::Left);
+                leave_navigate_mode(&mut self.state);
+            }
+            NavigateAction::FocusPaneOrTabRight => {
+                self.focus_pane_or_tab_horizontal_via_api(NavDirection::Right);
+                leave_navigate_mode(&mut self.state);
             }
             NavigateAction::SwapPaneLeft => {
                 self.swap_pane_direction_via_api(NavDirection::Left);
@@ -780,6 +890,41 @@ impl App {
         Some((ws.active_tab as isize + delta).rem_euclid(ws.tabs.len() as isize) as usize)
     }
 
+    fn focus_pane_or_tab_horizontal_via_api(&mut self, direction: NavDirection) {
+        let Some(ws_idx) = self.state.active else {
+            return;
+        };
+        if let Some((_, target)) = self.directional_pane_target_from_view(direction) {
+            self.focus_pane_internal_via_api(ws_idx, target);
+            return;
+        }
+
+        let delta = match direction {
+            NavDirection::Left => -1,
+            NavDirection::Right => 1,
+            _ => return,
+        };
+        let Some(tab_idx) = self.relative_tab(delta) else {
+            return;
+        };
+        let Some(tab) = self
+            .state
+            .workspaces
+            .get(ws_idx)
+            .and_then(|ws| ws.tabs.get(tab_idx))
+        else {
+            return;
+        };
+        let target = match direction {
+            NavDirection::Left => tab.layout.pane_ids().last().copied(),
+            NavDirection::Right => tab.layout.pane_ids().first().copied(),
+            _ => None,
+        };
+        if let Some(target) = target {
+            self.focus_pane_internal_via_api(ws_idx, target);
+        }
+    }
+
     fn agent_entry_target(&self, idx: usize) -> Option<(usize, crate::layout::PaneId)> {
         let entries = crate::ui::agent_panel_entries(&self.state);
         let target = entries.get(idx)?;
@@ -1200,6 +1345,7 @@ pub(crate) fn command_for_key(
         .cloned()
 }
 
+#[cfg(test)]
 fn unmodified_digit_for_key(key: &TerminalKey) -> Option<char> {
     ('1'..='9').find(|digit| {
         crate::config::terminal_key_matches_combo(
@@ -1291,58 +1437,6 @@ pub(super) fn handle_navigate_reserved_key(state: &mut AppState, key: TerminalKe
     false
 }
 
-fn navigate_reserved_action_for_key(state: &AppState, key: &TerminalKey) -> Option<NavigateAction> {
-    if let Some(c) = unmodified_digit_for_key(key) {
-        return Some(NavigateAction::SwitchWorkspace(
-            (c as usize) - ('1' as usize),
-        ));
-    }
-
-    let (code, modifiers) = crate::config::normalize_key_combo((key.code, key.modifiers));
-    if modifiers.is_empty() {
-        match code {
-            KeyCode::Enter => {
-                return (!state.workspaces.is_empty()).then_some(NavigateAction::SwitchWorkspace(
-                    state
-                        .visible_workspace_order()
-                        .iter()
-                        .position(|idx| *idx == state.selected)
-                        .unwrap_or(state.selected),
-                ));
-            }
-            KeyCode::Tab => return Some(NavigateAction::CyclePaneNext),
-            KeyCode::BackTab => return Some(NavigateAction::CyclePanePrevious),
-            KeyCode::Left => return Some(NavigateAction::FocusPaneLeft),
-            KeyCode::Right => return Some(NavigateAction::FocusPaneRight),
-            _ => {}
-        }
-    }
-
-    if state.keybinds.navigate.workspace_up.matches_direct_key(key)
-        || state
-            .keybinds
-            .navigate
-            .workspace_down
-            .matches_direct_key(key)
-    {
-        return None;
-    }
-    if state.keybinds.navigate.pane_left.matches_direct_key(key) {
-        return Some(NavigateAction::FocusPaneLeft);
-    }
-    if state.keybinds.navigate.pane_down.matches_direct_key(key) {
-        return Some(NavigateAction::FocusPaneDown);
-    }
-    if state.keybinds.navigate.pane_up.matches_direct_key(key) {
-        return Some(NavigateAction::FocusPaneUp);
-    }
-    if state.keybinds.navigate.pane_right.matches_direct_key(key) {
-        return Some(NavigateAction::FocusPaneRight);
-    }
-
-    None
-}
-
 pub(super) fn api_pane_direction(direction: NavDirection) -> crate::api::schema::PaneDirection {
     match direction {
         NavDirection::Left => crate::api::schema::PaneDirection::Left,
@@ -1364,6 +1458,16 @@ pub(crate) fn handle_navigate_key(state: &mut AppState, key: KeyEvent) {
     }
 
     if handle_navigate_reserved_key(state, terminal_key.clone()) {
+        return;
+    }
+
+    if let Some(action) = navigate_mode_direct_pane_action(state, &terminal_key) {
+        execute_navigate_action_in_context(
+            state,
+            &mut terminal_runtimes,
+            action,
+            ActionContext::Navigate,
+        );
         return;
     }
 
@@ -1405,6 +1509,8 @@ pub(crate) enum NavigateAction {
     FocusPaneDown,
     FocusPaneUp,
     FocusPaneRight,
+    FocusPaneOrTabLeft,
+    FocusPaneOrTabRight,
     SwapPaneLeft,
     SwapPaneDown,
     SwapPaneUp,
@@ -1554,6 +1660,14 @@ fn non_indexed_action_for_key(
         (&kb.focus_pane_down, NavigateAction::FocusPaneDown),
         (&kb.focus_pane_up, NavigateAction::FocusPaneUp),
         (&kb.focus_pane_right, NavigateAction::FocusPaneRight),
+        (
+            &kb.focus_pane_or_tab_left,
+            NavigateAction::FocusPaneOrTabLeft,
+        ),
+        (
+            &kb.focus_pane_or_tab_right,
+            NavigateAction::FocusPaneOrTabRight,
+        ),
         (&kb.swap_pane_left, NavigateAction::SwapPaneLeft),
         (&kb.swap_pane_down, NavigateAction::SwapPaneDown),
         (&kb.swap_pane_up, NavigateAction::SwapPaneUp),
@@ -1595,6 +1709,8 @@ fn navigate_mode_action_for_key(state: &AppState, key: TerminalKey) -> Option<Na
             | NavigateAction::FocusPaneDown
             | NavigateAction::FocusPaneUp
             | NavigateAction::FocusPaneRight
+            | NavigateAction::FocusPaneOrTabLeft
+            | NavigateAction::FocusPaneOrTabRight
     ) {
         return None;
     }
@@ -1612,10 +1728,62 @@ fn navigate_mode_non_indexed_action_for_key(
             | NavigateAction::FocusPaneDown
             | NavigateAction::FocusPaneUp
             | NavigateAction::FocusPaneRight
+            | NavigateAction::FocusPaneOrTabLeft
+            | NavigateAction::FocusPaneOrTabRight
     ) {
         return None;
     }
     Some(action)
+}
+
+fn navigate_mode_direct_pane_action(state: &AppState, key: &TerminalKey) -> Option<NavigateAction> {
+    let (code, modifiers) = crate::config::normalize_key_combo((key.code, key.modifiers));
+    if modifiers.is_empty() {
+        match code {
+            KeyCode::Left => return Some(NavigateAction::FocusPaneLeft),
+            KeyCode::Right => return Some(NavigateAction::FocusPaneRight),
+            _ => {}
+        }
+    }
+
+    for (bindings, action) in [
+        (
+            &state.keybinds.focus_pane_or_tab_left,
+            NavigateAction::FocusPaneOrTabLeft,
+        ),
+        (
+            &state.keybinds.focus_pane_or_tab_right,
+            NavigateAction::FocusPaneOrTabRight,
+        ),
+    ] {
+        if bindings.matches_direct_key(key) {
+            return Some(action);
+        }
+    }
+
+    for (bindings, action) in [
+        (
+            &state.keybinds.navigate.pane_left,
+            NavigateAction::FocusPaneLeft,
+        ),
+        (
+            &state.keybinds.navigate.pane_down,
+            NavigateAction::FocusPaneDown,
+        ),
+        (
+            &state.keybinds.navigate.pane_up,
+            NavigateAction::FocusPaneUp,
+        ),
+        (
+            &state.keybinds.navigate.pane_right,
+            NavigateAction::FocusPaneRight,
+        ),
+    ] {
+        if bindings.matches_direct_key(key) {
+            return Some(action);
+        }
+    }
+    None
 }
 
 fn navigate_mode_indexed_action_for_key(
@@ -1773,6 +1941,14 @@ pub(super) fn execute_navigate_action_in_context(
         NavigateAction::FocusPaneDown => state.navigate_pane(NavDirection::Down),
         NavigateAction::FocusPaneUp => state.navigate_pane(NavDirection::Up),
         NavigateAction::FocusPaneRight => state.navigate_pane(NavDirection::Right),
+        NavigateAction::FocusPaneOrTabLeft => {
+            state.navigate_pane_or_tab_horizontal(NavDirection::Left);
+            leave_navigate_mode(state);
+        }
+        NavigateAction::FocusPaneOrTabRight => {
+            state.navigate_pane_or_tab_horizontal(NavDirection::Right);
+            leave_navigate_mode(state);
+        }
         NavigateAction::SwapPaneLeft => {
             state.swap_pane(NavDirection::Left);
             leave_navigate_mode(state);
@@ -2627,6 +2803,38 @@ navigate_pane_right = "ctrl+l"
         );
         assert_eq!(state.workspaces[0].focused_pane_id(), Some(right));
         assert_eq!(state.mode, Mode::Navigate);
+    }
+
+    #[test]
+    fn direct_pane_or_tab_binding_falls_back_at_horizontal_pane_edge() {
+        let mut state = state_with_workspaces(&["test"]);
+        let previous_tab = state.workspaces[0].test_add_tab(Some("previous"));
+        state.workspaces[0].active_tab = previous_tab;
+        state.workspaces[0].test_add_tab(Some("current"));
+        state.workspaces[0].active_tab = previous_tab + 1;
+        state.keybinds.focus_pane_or_tab_left = crate::config::ActionKeybinds::direct("alt+h");
+        state.mode = Mode::Navigate;
+        crate::ui::compute_view(&mut state, ratatui::layout::Rect::new(0, 0, 80, 24));
+
+        handle_navigate_key(
+            &mut state,
+            KeyEvent::new(KeyCode::Char('h'), KeyModifiers::ALT),
+        );
+
+        assert_eq!(state.workspaces[0].active_tab, previous_tab);
+        assert_eq!(state.mode, Mode::Terminal);
+    }
+
+    #[test]
+    fn navigate_enter_selects_the_highlighted_workspace() {
+        let mut app = app_with_test_workspaces(&["one", "two"]);
+        app.state.mode = Mode::Navigate;
+        app.state.selected = 1;
+
+        app.handle_navigate_key(TerminalKey::new(KeyCode::Enter, KeyModifiers::empty()));
+
+        assert_eq!(app.state.active, Some(1));
+        assert_eq!(app.state.mode, Mode::Terminal);
     }
 
     #[test]

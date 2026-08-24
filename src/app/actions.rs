@@ -1484,7 +1484,9 @@ impl AppState {
         if let Some(ws) = self.active.and_then(|i| self.workspaces.get(i)) {
             if !ws.tabs.is_empty() {
                 let next = (ws.active_tab + 1) % ws.tabs.len();
-                self.switch_tab(next);
+                if let Some(ws_idx) = self.active {
+                    self.switch_workspace_tab(ws_idx, next);
+                }
             }
         }
     }
@@ -1498,7 +1500,9 @@ impl AppState {
                 } else {
                     ws.active_tab - 1
                 };
-                self.switch_tab(prev);
+                if let Some(ws_idx) = self.active {
+                    self.switch_workspace_tab(ws_idx, prev);
+                }
             }
         }
     }
@@ -1751,12 +1755,16 @@ impl AppState {
             return;
         };
 
+        let empty_runtimes = crate::terminal::TerminalRuntimeRegistry::new();
         let layout = crate::ui::compute_tab_bar_view(
             ws,
             crate::ui::tab_bar_content_area(self, area),
             self.tab_scroll,
             self.tab_scroll_follow_active,
             self.mouse_capture,
+            self.show_tab_bar_new_tab_button,
+            &self.terminals,
+            &empty_runtimes,
         );
         self.tab_scroll = layout.scroll;
         self.view.tab_hit_areas = layout.tab_hit_areas;
@@ -1811,6 +1819,35 @@ impl AppState {
             if let Some(target) = find_in_direction(focused, direction, &panes) {
                 self.focus_pane_in_workspace(ws_idx, target);
             }
+        }
+    }
+
+    /// Zellij-style horizontal nav: move between panes in the active tab, then cycle tabs at the edge.
+    #[cfg(test)]
+    pub fn navigate_pane_or_tab_horizontal(&mut self, direction: NavDirection) {
+        let Some(ws_idx) = self.active else {
+            return;
+        };
+        let Some(tab) = self.workspaces.get(ws_idx).and_then(|ws| ws.active_tab()) else {
+            return;
+        };
+        let panes = if tab.zoomed {
+            tab.layout.panes(self.view.terminal_area)
+        } else {
+            self.view.pane_infos.clone()
+        };
+
+        if let Some(focused) = panes.iter().find(|p| p.is_focused) {
+            if let Some(target) = find_in_direction(focused, direction, &panes) {
+                self.focus_pane_in_workspace(ws_idx, target);
+                return;
+            }
+        }
+
+        match direction {
+            NavDirection::Left => self.previous_tab(),
+            NavDirection::Right => self.next_tab(),
+            _ => {}
         }
     }
 
@@ -2937,6 +2974,7 @@ impl AppState {
                 if terminal.cwd != cwd {
                     terminal.cwd = cwd;
                     self.mark_session_dirty();
+                    self.refresh_tab_bar_view();
                 }
                 Vec::new()
             }

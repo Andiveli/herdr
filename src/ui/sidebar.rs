@@ -152,7 +152,7 @@ fn collect_agent_panel_entries_with_runtimes(
         .flat_map(|(ws_idx, ws)| {
             let multi_tab = ws.tabs.len() > 1;
             let workspace_label = ws.display_name_from(&app.terminals, terminal_runtimes);
-            ws.pane_details(&app.terminals)
+            ws.pane_details(&app.terminals, terminal_runtimes)
                 .into_iter()
                 .map(move |detail| {
                     let show_tab = multi_tab
@@ -2098,7 +2098,7 @@ rows = [[{ token = "git_status", fg = "#123456" }]]
             [
                 ("auto", None),
                 ("custom", Some("focus")),
-                ("multi", Some("1")),
+                ("multi", Some("herdr")),
                 ("multi", Some("logs")),
             ]
         );

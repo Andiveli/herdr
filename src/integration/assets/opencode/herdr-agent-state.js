@@ -130,6 +130,9 @@ export const HerdrAgentStatePlugin = async () => {
   return {
     "chat.message": async ({ sessionID }) => {
       if (sessionID && childSessions.has(sessionID)) {
+        // A child prompt is still active work in this pane. Do not attach the
+        // child session, but do clear a blocked state left by its question.
+        await reportState("working");
         return;
       }
       await reportState("working", sessionID);

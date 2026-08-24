@@ -141,6 +141,18 @@
           "type": "color",
           "default": "unset",
           "description": "Override the peach color token on top of the base theme. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.tab_active_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override the active tab label foreground color. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.tab_inactive_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override inactive tab label foreground colors. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
         }
       ]
     },
@@ -464,6 +476,18 @@
           "description": "Focus the pane to the right."
         },
         {
+          "key": "keys.focus_pane_or_tab_left",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Focus the pane to the left, or the previous tab when already at the edge."
+        },
+        {
+          "key": "keys.focus_pane_or_tab_right",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Focus the pane to the right, or the next tab when already at the edge."
+        },
+        {
           "key": "keys.swap_pane_left",
           "type": "keybinding",
           "default": "\"prefix+shift+h\"",
@@ -758,6 +782,12 @@
           "type": "string",
           "default": "\"{hostname}: {workspace}\"",
           "description": "Title Herdr writes to the terminal it runs in. Tokens: {hostname}, {workspace}, {tab}, {pane}, {terminal_title}. Empty leaves the outer title alone."
+        },
+        {
+          "key": "ui.show_tab_bar_new_tab_button",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the trailing \"+\" mouse button on the tab bar."
         },
         {
           "key": "ui.agent_panel_sort",
