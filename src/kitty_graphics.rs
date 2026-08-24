@@ -602,35 +602,6 @@ fn encode_graphics_update_incremental(
             || desired_sources.contains(source)
     });
 
-    let mut stale = cache
-        .placements
-        .keys()
-        .filter(|key| !desired_placements.contains(key))
-        .copied()
-        .collect::<Vec<_>>();
-    stale.sort_unstable();
-    let mut stale_image = None;
-    for key @ (host_id, placement_id) in stale {
-        let mut transaction = Vec::new();
-        encode_delete_placement(&mut transaction, host_id, placement_id);
-        let same_image = stale_image == Some(host_id);
-        if emitted
-            && !(coalesce_placements
-                && same_image
-                && coalesced_transaction_fits(bytes.len(), transaction.len(), transaction_budget))
-        {
-            return EncodedGraphics {
-                bytes,
-                incomplete: true,
-            };
-        }
-        bytes.extend(transaction);
-        cache.placements.remove(&key);
-        cache.replayed_placements.remove(&key);
-        emitted = true;
-        stale_image = Some(host_id);
-    }
-
     // Keep unrelated images isolated, but treat every row of one logical image
     // as part of its upload or replacement transaction. Sending only the first
     // row exposes the blank placeholder cells until later frames catch up.
@@ -689,6 +660,39 @@ fn encode_graphics_update_incremental(
         if coalesce_pass && !pure_redisplay {
             coalesce_target = Some((placement.source_key.clone(), host_id));
         }
+    }
+
+    // Replacement uploads may release the old image and all of its placements
+    // while building the candidate transaction above. Defer stale placement
+    // deletion until after placements are processed so a replacement can be
+    // encoded in one transaction instead of exposing a cleanup-only frame.
+    let mut stale = cache
+        .placements
+        .keys()
+        .filter(|key| !desired_placements.contains(key))
+        .copied()
+        .collect::<Vec<_>>();
+    stale.sort_unstable();
+    let mut stale_image = None;
+    for key @ (host_id, placement_id) in stale {
+        let mut transaction = Vec::new();
+        encode_delete_placement(&mut transaction, host_id, placement_id);
+        let same_image = stale_image == Some(host_id);
+        if emitted
+            && !(coalesce_placements
+                && same_image
+                && coalesced_transaction_fits(bytes.len(), transaction.len(), transaction_budget))
+        {
+            return EncodedGraphics {
+                bytes,
+                incomplete: true,
+            };
+        }
+        bytes.extend(transaction);
+        cache.placements.remove(&key);
+        cache.replayed_placements.remove(&key);
+        emitted = true;
+        stale_image = Some(host_id);
     }
 
     cache.replay_placements = false;
@@ -776,7 +780,6 @@ fn encode_placement_update(
         cache.images.insert(host_id, image_signature);
     }
 
-    release_superseded_source_image(&mut bytes, cache, placement.source_key.clone(), host_id);
     if !displayed && !placement_current {
         encode_display_placement(
             &mut bytes,
@@ -786,6 +789,11 @@ fn encode_placement_update(
             placement.placement.z,
         );
     }
+    // Make the replacement visible before releasing the old host image. The
+    // whole candidate remains one bounded graphics transaction, while this
+    // ordering also avoids a blank interval if a terminal observes commands
+    // within that transaction incrementally.
+    release_superseded_source_image(&mut bytes, cache, placement.source_key.clone(), host_id);
     cache.placements.insert(key, placement_signature);
     if cache.replay_placements {
         cache.replayed_placements.insert(key);
@@ -2769,7 +2777,7 @@ mod tests {
     }
 
     #[test]
-    fn budgeted_image_rows_delete_old_rows_together_before_replacement() {
+    fn budgeted_image_rows_replace_atomically_with_old_cleanup() {
         const IMAGE_ROWS: usize = 23;
         let old = image_covering_rows(IMAGE_ROWS);
         let mut cache = HostGraphicsCache::default();
@@ -2789,17 +2797,6 @@ mod tests {
         for placement in &mut replacement {
             placement.placement.data_fingerprint += 1;
         }
-        let cleanup = encode_terminal_graphics_update(
-            &mut cache,
-            &replacement,
-            false,
-            Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
-        );
-        assert!(cleanup.incomplete);
-        let cleanup = String::from_utf8(cleanup.bytes).unwrap();
-        assert_eq!(cleanup.matches("a=d,d=i").count(), IMAGE_ROWS);
-        assert!(!cleanup.contains("a=t"));
-
         let replaced = encode_terminal_graphics_update(
             &mut cache,
             &replacement,
@@ -2807,6 +2804,7 @@ mod tests {
             Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
         );
         assert!(!replaced.incomplete);
+        assert!(replaced.bytes.len() <= HEADLESS_GRAPHICS_TRANSACTION_BUDGET);
         let replaced = String::from_utf8(replaced.bytes).unwrap();
         assert_eq!(replaced.matches("a=t").count(), 1);
         assert_eq!(replaced.matches("a=d,d=I").count(), 1);
