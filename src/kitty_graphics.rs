@@ -606,6 +606,7 @@ fn encode_graphics_update_incremental(
     // as part of its upload or replacement transaction. Sending only the first
     // row exposes the blank placeholder cells until later frames catch up.
     let coalesce_pass = coalesce_placements && !emitted;
+    let mut coalesce_all_placements = false;
     let mut coalesce_target = None;
     for offset in 0..placements.len() {
         let index = (start + offset) % placements.len();
@@ -626,6 +627,10 @@ fn encode_graphics_update_incremental(
         // delete from `release_superseded_source_image`.
         let pure_redisplay =
             image_cached && cache.sources.get(&placement.source_key) == Some(&host_id);
+        let source_was_replaced = cache
+            .sources
+            .get(&placement.source_key)
+            .is_some_and(|previous| *previous != host_id);
         if !image_cached && !image_transaction_fits(placement, transaction_budget) {
             cache.quarantine_oversized(placement.source_key.clone(), signature);
             continue;
@@ -638,13 +643,15 @@ fn encode_graphics_update_incremental(
             *cache = candidate;
             continue;
         }
-        let same_logical_image = coalesce_target.as_ref().is_none_or(|(source, target_id)| {
-            source == &placement.source_key && *target_id == host_id
-        });
+        let placement_only = !transaction.windows(3).any(|window| window == b"a=t");
         if emitted
             && !(coalesce_pass
                 && pure_redisplay
-                && same_logical_image
+                && placement_only
+                && (coalesce_all_placements
+                    || coalesce_target.as_ref().is_some_and(|(source, target_id)| {
+                        source == &placement.source_key && *target_id == host_id
+                    }))
                 && coalesced_transaction_fits(bytes.len(), transaction.len(), transaction_budget))
         {
             return EncodedGraphics {
@@ -657,8 +664,12 @@ fn encode_graphics_update_incremental(
         cache.continuation = Some((source, id, (index + 1) % placements.len()));
         bytes.extend(transaction);
         emitted = true;
-        if coalesce_pass && !pure_redisplay {
-            coalesce_target = Some((placement.source_key.clone(), host_id));
+        if coalesce_pass {
+            if pure_redisplay || source_was_replaced {
+                coalesce_all_placements = true;
+            } else {
+                coalesce_target = Some((placement.source_key.clone(), host_id));
+            }
         }
     }
 
@@ -673,14 +684,11 @@ fn encode_graphics_update_incremental(
         .copied()
         .collect::<Vec<_>>();
     stale.sort_unstable();
-    let mut stale_image = None;
     for key @ (host_id, placement_id) in stale {
         let mut transaction = Vec::new();
         encode_delete_placement(&mut transaction, host_id, placement_id);
-        let same_image = stale_image == Some(host_id);
         if emitted
             && !(coalesce_placements
-                && same_image
                 && coalesced_transaction_fits(bytes.len(), transaction.len(), transaction_budget))
         {
             return EncodedGraphics {
@@ -692,7 +700,6 @@ fn encode_graphics_update_incremental(
         cache.placements.remove(&key);
         cache.replayed_placements.remove(&key);
         emitted = true;
-        stale_image = Some(host_id);
     }
 
     cache.replay_placements = false;
@@ -2727,6 +2734,27 @@ mod tests {
             .collect()
     }
 
+    fn cached_source_rows(
+        image_id: u32,
+        fingerprint: u64,
+        placement_start: u32,
+    ) -> Vec<HostPlacement> {
+        image_covering_rows(3)
+            .into_iter()
+            .enumerate()
+            .map(|(row, mut placement)| {
+                placement.placement.image_id = image_id;
+                placement.placement.data_fingerprint = fingerprint;
+                placement.placement.placement_id = placement_start + row as u32;
+                placement.source_key = HostSourceKey::Terminal {
+                    pane_id: placement.pane_id,
+                    image_id,
+                };
+                placement
+            })
+            .collect()
+    }
+
     #[test]
     fn budgeted_image_rows_upload_in_one_transaction() {
         const IMAGE_ROWS: usize = 23;
@@ -2841,6 +2869,75 @@ mod tests {
         let replay = String::from_utf8(replay.bytes).unwrap();
         assert!(!replay.contains("a=t"));
         assert_eq!(replay.matches("a=p").count(), IMAGE_ROWS);
+    }
+
+    #[test]
+    fn budgeted_cached_multi_source_scroll_coalesces_all_placements() {
+        let mut old = cached_source_rows(7, 42, 100);
+        old.extend(cached_source_rows(8, 43, 200));
+        let mut cache = HostGraphicsCache::default();
+
+        loop {
+            let encoded = encode_terminal_graphics_update(
+                &mut cache,
+                &old,
+                false,
+                Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
+            );
+            if !encoded.incomplete {
+                break;
+            }
+        }
+
+        let mut moved = cached_source_rows(7, 42, 1_100);
+        moved.extend(cached_source_rows(8, 43, 1_200));
+        for placement in &mut moved {
+            placement.placement.render.viewport_col = 4;
+        }
+        let encoded = encode_terminal_graphics_update(
+            &mut cache,
+            &moved,
+            false,
+            Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
+        );
+
+        assert!(!encoded.incomplete);
+        assert!(encoded.bytes.len() <= HEADLESS_GRAPHICS_TRANSACTION_BUDGET);
+        let update = String::from_utf8(encoded.bytes).unwrap();
+        assert_eq!(update.matches("a=d,d=i").count(), old.len());
+        assert_eq!(update.matches("a=p").count(), moved.len());
+        assert!(!update.contains("a=t"));
+    }
+
+    #[test]
+    fn budgeted_cached_multi_source_disappearance_coalesces_all_deletes() {
+        let mut placements = cached_source_rows(7, 42, 100);
+        placements.extend(cached_source_rows(8, 43, 200));
+        let mut cache = HostGraphicsCache::default();
+
+        loop {
+            let encoded = encode_terminal_graphics_update(
+                &mut cache,
+                &placements,
+                false,
+                Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
+            );
+            if !encoded.incomplete {
+                break;
+            }
+        }
+
+        let encoded = encode_terminal_graphics_update(
+            &mut cache,
+            &[],
+            false,
+            Some(HEADLESS_GRAPHICS_TRANSACTION_BUDGET),
+        );
+        assert!(!encoded.incomplete);
+        let update = String::from_utf8(encoded.bytes).unwrap();
+        assert_eq!(update.matches("a=d,d=i").count(), placements.len());
+        assert!(!update.contains("a=d,d=I"));
+        assert!(cache.placements.is_empty());
     }
 
     #[test]
@@ -2976,7 +3073,7 @@ mod tests {
     }
 
     #[test]
-    fn budgeted_superseded_image_delete_does_not_coalesce() {
+    fn budgeted_replacement_coalesces_cached_movement() {
         fn pair() -> [HostPlacement; 2] {
             let first = test_placement(0, 0);
             let mut second = test_placement(4, 0);
@@ -3024,8 +3121,8 @@ mod tests {
             if bytes.contains("a=d,d=I") {
                 saw_release = true;
                 assert!(
-                    bytes.matches("a=p").count() <= 1,
-                    "a superseded-image delete carries at most its own placement"
+                    bytes.matches("a=p").count() >= 2,
+                    "a replacement carries the unchanged cached movement"
                 );
             }
             if !encoded.incomplete {
