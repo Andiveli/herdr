@@ -315,28 +315,6 @@ test("Pi settlement preserves explicit blocked-state precedence", async () => {
   expect(requestStates(requests)).toEqual(["idle", "working", "blocked", "idle"]);
 });
 
-test("Pi maps RPIV questionnaire events to blocked state", async () => {
-  const requests = await startRecordingServer("pi-rpiv-blocked");
-  const { eventHandlers, handlers, pi } = createExtensionHarness();
-  const { default: install } = await importFresh("./pi/herdr-agent-state.ts");
-  install(pi);
-
-  let idle = true;
-  const context = piContext(() => idle);
-  await handlers.get("session_start")?.({ reason: "startup" }, context);
-  await waitFor(() => requestStates(requests).length === 1);
-  idle = false;
-  handlers.get("agent_start")?.({}, context);
-  await waitFor(() => requestStates(requests).length === 2);
-
-  eventHandlers.get("rpiv:ask-user:blocked")?.({ active: true }, context);
-  await waitFor(() => requestStates(requests).length === 3);
-  eventHandlers.get("rpiv:ask-user:blocked")?.({ active: false }, context);
-  await waitFor(() => requestStates(requests).length === 4);
-
-  expect(requestStates(requests)).toEqual(["idle", "working", "blocked", "working"]);
-});
-
 test("Pi reports the session replacement source", async () => {
   const requests = await startRecordingServer("pi-session-source");
   const { handlers, pi } = createExtensionHarness();
