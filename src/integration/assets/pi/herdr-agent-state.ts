@@ -2,7 +2,7 @@
 // managed by herdr; reinstalling or updating the integration overwrites this file.
 // add custom hooks/plugins beside this file instead of editing it.
 // HERDR_INTEGRATION_ID=pi
-// HERDR_INTEGRATION_VERSION=8
+// HERDR_INTEGRATION_VERSION=9
 // @ts-nocheck
 
 import net from "node:net";
@@ -204,7 +204,7 @@ export default function (pi) {
     queueState(next.state, next.message);
   }
 
-  pi.events.on("herdr:blocked", (data) => {
+  const handleBlockedEvent = (data) => {
     if (!rootSession) {
       return;
     }
@@ -220,7 +220,10 @@ export default function (pi) {
     blockedCount += 1;
     blockedMessage = data.label;
     publishState();
-  });
+  };
+
+  pi.events.on("herdr:blocked", handleBlockedEvent);
+  pi.events.on("rpiv:ask-user:blocked", handleBlockedEvent);
 
   pi.on("session_start", async (event, ctx) => {
     // TUI only: RPC/JSON/print modes are headless (no PTY herdr can display),
