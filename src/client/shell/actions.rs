@@ -159,6 +159,14 @@ impl ClientShellState {
                     }
                     return;
                 }
+                if matches!(
+                    action,
+                    crate::input::KeybindAction::FocusPaneOrTabLeft
+                        | crate::input::KeybindAction::FocusPaneOrTabRight
+                ) {
+                    self.request_pane_or_tab_neighbor(action, outcome);
+                    return;
+                }
                 if self.handle_endpoint_navigation(action, outcome) {
                     return;
                 }
@@ -557,6 +565,44 @@ impl ClientShellState {
             }
         }
         match pending.kind {
+            PendingEndpointKind::PaneOrTabNeighbor {
+                intent_id,
+                snapshot_revision,
+                source_pane_id,
+                source_tab_id,
+                workspace_id,
+                direction,
+            } => {
+                return self.complete_pane_or_tab_neighbor(
+                    intent_id,
+                    snapshot_revision,
+                    source_pane_id,
+                    source_tab_id,
+                    workspace_id,
+                    direction,
+                    result,
+                );
+            }
+            PendingEndpointKind::PaneOrTabLayout {
+                intent_id,
+                snapshot_revision,
+                source_pane_id,
+                source_tab_id,
+                target_tab_id,
+                workspace_id,
+                direction,
+            } => {
+                return self.complete_pane_or_tab_layout(
+                    intent_id,
+                    snapshot_revision,
+                    source_pane_id,
+                    source_tab_id,
+                    target_tab_id,
+                    workspace_id,
+                    direction,
+                    result,
+                );
+            }
             PendingEndpointKind::Generic => {}
             PendingEndpointKind::PaneLinkResolve { .. } => unreachable!("handled above"),
             PendingEndpointKind::ProductAnnouncementDismiss { version, id } => {
@@ -846,6 +892,192 @@ impl ClientShellState {
             Err(_) => true,
         };
         (repaint, Vec::new())
+    }
+
+    fn request_pane_or_tab_neighbor(
+        &mut self,
+        action: crate::input::KeybindAction,
+        outcome: &mut ClientShellInput,
+    ) {
+        use crate::api::schema::{Method, PaneDirection, PaneNeighborParams};
+        let Some(snapshot) = self.snapshot.as_deref() else {
+            return;
+        };
+        let (Some(source_pane_id), Some(source_tab_id), Some(workspace_id)) = (
+            snapshot.focused_pane_id.clone(),
+            snapshot.focused_tab_id.clone(),
+            snapshot.focused_workspace_id.clone(),
+        ) else {
+            return;
+        };
+        let direction = if action == crate::input::KeybindAction::FocusPaneOrTabLeft {
+            PaneDirection::Left
+        } else {
+            PaneDirection::Right
+        };
+        self.pane_or_tab_intent_id = self.pane_or_tab_intent_id.saturating_add(1);
+        let intent_id = self.pane_or_tab_intent_id;
+        let snapshot_revision = snapshot.revision;
+        self.push_endpoint_method_with_kind(
+            Method::PaneNeighbor(PaneNeighborParams {
+                pane_id: Some(source_pane_id.clone()),
+                direction,
+            }),
+            PendingEndpointKind::PaneOrTabNeighbor {
+                intent_id,
+                snapshot_revision,
+                source_pane_id,
+                source_tab_id,
+                workspace_id,
+                direction,
+            },
+            outcome,
+        );
+    }
+
+    fn pane_or_tab_source_is_current(
+        &self,
+        intent_id: u64,
+        snapshot_revision: u64,
+        workspace_id: &str,
+        tab_id: &str,
+        pane_id: &str,
+    ) -> bool {
+        self.pane_or_tab_intent_id == intent_id
+            && self.snapshot.as_deref().is_some_and(|snapshot| {
+                snapshot.revision == snapshot_revision
+                    && snapshot.focused_workspace_id.as_deref() == Some(workspace_id)
+                    && snapshot.focused_tab_id.as_deref() == Some(tab_id)
+                    && snapshot.focused_pane_id.as_deref() == Some(pane_id)
+            })
+    }
+
+    fn complete_pane_or_tab_neighbor(
+        &mut self,
+        intent_id: u64,
+        snapshot_revision: u64,
+        source_pane_id: String,
+        source_tab_id: String,
+        workspace_id: String,
+        direction: crate::api::schema::PaneDirection,
+        result: Result<crate::api::schema::ResponseResult, ClientShellEndpointError>,
+    ) -> (bool, Vec<ClientShellAction>) {
+        use crate::api::schema::{Method, PaneLayoutParams, PaneTarget, ResponseResult};
+        if !self.pane_or_tab_source_is_current(
+            intent_id,
+            snapshot_revision,
+            &workspace_id,
+            &source_tab_id,
+            &source_pane_id,
+        ) {
+            return (false, Vec::new());
+        }
+        let Ok(ResponseResult::PaneNeighbor { neighbor }) = result else {
+            return (false, Vec::new());
+        };
+        if neighbor.pane_id != source_pane_id
+            || neighbor.direction != direction
+            || neighbor.layout.tab_id != source_tab_id
+            || neighbor.layout.workspace_id != workspace_id
+        {
+            return (false, Vec::new());
+        }
+        let mut outcome = ClientShellInput::default();
+        if let Some(pane_id) = neighbor.neighbor_pane_id {
+            self.push_endpoint_method(Method::PaneFocus(PaneTarget { pane_id }), &mut outcome);
+            return (outcome.repaint, outcome.actions);
+        }
+        let Some(snapshot) = self.snapshot.as_deref() else {
+            return (false, Vec::new());
+        };
+        let tabs: Vec<_> = snapshot
+            .tabs
+            .iter()
+            .filter(|tab| tab.workspace_id == workspace_id)
+            .collect();
+        let Some(current) = tabs.iter().position(|tab| tab.tab_id == source_tab_id) else {
+            return (false, Vec::new());
+        };
+        let next = if direction == crate::api::schema::PaneDirection::Left {
+            (current + tabs.len() - 1) % tabs.len()
+        } else {
+            (current + 1) % tabs.len()
+        };
+        let target_tab_id = tabs[next].tab_id.clone();
+        let Some(target_pane_id) = snapshot
+            .panes
+            .iter()
+            .find(|pane| pane.tab_id == target_tab_id)
+            .map(|pane| pane.pane_id.clone())
+        else {
+            return (false, Vec::new());
+        };
+        self.push_endpoint_method_with_kind(
+            Method::PaneLayout(PaneLayoutParams {
+                pane_id: Some(target_pane_id),
+            }),
+            PendingEndpointKind::PaneOrTabLayout {
+                intent_id,
+                snapshot_revision,
+                source_pane_id,
+                source_tab_id,
+                target_tab_id,
+                workspace_id,
+                direction,
+            },
+            &mut outcome,
+        );
+        (outcome.repaint, outcome.actions)
+    }
+
+    fn complete_pane_or_tab_layout(
+        &mut self,
+        intent_id: u64,
+        snapshot_revision: u64,
+        source_pane_id: String,
+        source_tab_id: String,
+        target_tab_id: String,
+        workspace_id: String,
+        direction: crate::api::schema::PaneDirection,
+        result: Result<crate::api::schema::ResponseResult, ClientShellEndpointError>,
+    ) -> (bool, Vec<ClientShellAction>) {
+        use crate::api::schema::{Method, PaneDirection, PaneTarget, ResponseResult};
+        if !self.pane_or_tab_source_is_current(
+            intent_id,
+            snapshot_revision,
+            &workspace_id,
+            &source_tab_id,
+            &source_pane_id,
+        ) {
+            return (false, Vec::new());
+        }
+        let Ok(ResponseResult::PaneLayout { layout }) = result else {
+            return (false, Vec::new());
+        };
+        if layout.tab_id != target_tab_id || layout.workspace_id != workspace_id {
+            return (false, Vec::new());
+        }
+        let target = if direction == PaneDirection::Left {
+            layout
+                .panes
+                .iter()
+                .max_by_key(|pane| (pane.rect.x, pane.rect.y))
+        } else {
+            layout
+                .panes
+                .iter()
+                .min_by_key(|pane| (pane.rect.x, pane.rect.y))
+        };
+        let mut outcome = ClientShellInput::default();
+        if let Some(pane) = target {
+            self.push_endpoint_method(
+                Method::PaneFocus(PaneTarget {
+                    pane_id: pane.pane_id.clone(),
+                }),
+                &mut outcome,
+            );
+        }
+        (outcome.repaint, outcome.actions)
     }
 
     pub(super) fn endpoint_method_for_action(

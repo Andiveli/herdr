@@ -618,6 +618,23 @@ impl ClientShellOverlay {
 #[derive(Debug)]
 pub(super) enum PendingEndpointKind {
     Generic,
+    PaneOrTabNeighbor {
+        intent_id: u64,
+        snapshot_revision: u64,
+        source_pane_id: String,
+        source_tab_id: String,
+        workspace_id: String,
+        direction: crate::api::schema::PaneDirection,
+    },
+    PaneOrTabLayout {
+        intent_id: u64,
+        snapshot_revision: u64,
+        source_pane_id: String,
+        source_tab_id: String,
+        target_tab_id: String,
+        workspace_id: String,
+        direction: crate::api::schema::PaneDirection,
+    },
     ProductAnnouncementDismiss {
         version: String,
         id: String,
@@ -940,6 +957,7 @@ pub(crate) struct ClientShellState {
     pub(super) popup_pending: bool,
     pub(super) popup_pending_deadline: Option<std::time::Instant>,
     pub(super) next_request_id: u64,
+    pub(super) pane_or_tab_intent_id: u64,
     pub(super) pending_requests: HashMap<String, PendingEndpointRequest>,
     pub(super) pending_integration_installs: usize,
     pub(super) pending_notifications: Vec<ClientPendingNotification>,
@@ -1108,6 +1126,7 @@ impl ClientShellState {
             popup_pending: false,
             popup_pending_deadline: None,
             next_request_id: 1,
+            pane_or_tab_intent_id: 0,
             pending_requests: HashMap::new(),
             pending_integration_installs: 0,
             pending_notifications: Vec::new(),

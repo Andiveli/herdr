@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Optional `focus_pane_or_tab_left` and `focus_pane_or_tab_right` bindings move horizontally between panes, then continue into the adjacent tab at a pane edge.
+
 ## [0.9.3] - 2026-09-29
 
 This is a hotfix release for v0.9.2. See the v0.9.2 notes for the full feature release: https://github.com/herdrdev/herdr/releases/tag/v0.9.2

@@ -179,6 +179,14 @@ pub(crate) fn keybind_help_groups(
                 ),
                 entry(binding_label(&keybinds.toggle_sidebar), "toggle sidebar"),
                 entry(binding_label(&keybinds.focus_pane_left), "focus pane left"),
+                entry(
+                    binding_label(&keybinds.focus_pane_or_tab_left),
+                    "focus pane or tab left",
+                ),
+                entry(
+                    binding_label(&keybinds.focus_pane_or_tab_right),
+                    "focus pane or tab right",
+                ),
                 entry(binding_label(&keybinds.focus_pane_down), "focus pane down"),
                 entry(binding_label(&keybinds.focus_pane_up), "focus pane up"),
                 entry(

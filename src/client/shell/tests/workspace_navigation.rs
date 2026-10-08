@@ -827,6 +827,261 @@ fn navigation_highlight_requires_enqueued_focus_and_yields_to_new_intent() {
 }
 
 #[test]
+fn opt_in_horizontal_motion_queries_the_server_for_a_neighbor() {
+    let mut config = Config::default();
+    config.keys.focus_pane_or_tab_left = crate::config::BindingConfig::one("ctrl+alt+h");
+    let mut state = local_navigation_state(false);
+    state.config.keybinds = ClientShellConfig::from_config(&config).keybinds;
+    let outcome =
+        state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+            KeyCode::Char('h'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ))]);
+    assert!(
+        matches!(outcome.actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+        if matches!(&request.method, crate::api::schema::Method::PaneNeighbor(params)
+            if params.pane_id.as_deref() == Some("pane_1")
+                && params.direction == crate::api::schema::PaneDirection::Left))
+    );
+}
+
+#[test]
+fn pane_or_tab_motion_focuses_neighbor_or_outer_pane_at_tab_edge() {
+    use crate::api::schema::{
+        Method, PaneDirection, PaneLayoutPane, PaneLayoutRect, PaneLayoutSnapshot,
+        PaneNeighborResult, ResponseResult,
+    };
+    for (left, neighbor_exists, one_tab) in [
+        (true, true, false),
+        (false, true, false),
+        (true, false, false),
+        (false, false, false),
+        (true, false, true),
+        (false, false, true),
+    ] {
+        let mut config = Config::default();
+        config.keys.focus_pane_or_tab_left = crate::config::BindingConfig::one("ctrl+alt+h");
+        config.keys.focus_pane_or_tab_right = crate::config::BindingConfig::one("ctrl+alt+l");
+        let mut projected = snapshot();
+        let mut tab = projected.tabs[0].clone();
+        tab.tab_id = "tab_2".into();
+        tab.focused = false;
+        if !one_tab {
+            projected.tabs.push(tab);
+        }
+        for id in ["pane_2", "pane_3"] {
+            let mut pane = projected.panes[0].clone();
+            pane.pane_id = id.into();
+            pane.tab_id = if one_tab { "tab_1" } else { "tab_2" }.into();
+            pane.focused = false;
+            projected.panes.push(pane);
+        }
+        let mut neighbor = projected.panes[0].clone();
+        neighbor.pane_id = "pane_4".into();
+        neighbor.focused = false;
+        projected.panes.push(neighbor);
+        let mut state = local_navigation_state(false);
+        state.config.keybinds = ClientShellConfig::from_config(&config).keybinds;
+        state.set_snapshot(Box::new(projected));
+        let key = if left { 'h' } else { 'l' };
+        let outcome =
+            state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+                KeyCode::Char(key),
+                KeyModifiers::CONTROL | KeyModifiers::ALT,
+            ))]);
+        let [ClientShellAction::Endpoint { request, .. }] = outcome.actions.as_slice() else {
+            panic!("expected neighbor request");
+        };
+        let layout = PaneLayoutSnapshot {
+            workspace_id: "ws_1".into(),
+            tab_id: "tab_1".into(),
+            zoomed: false,
+            area: PaneLayoutRect {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 20,
+            },
+            focused_pane_id: "pane_1".into(),
+            panes: Vec::new(),
+            splits: Vec::new(),
+        };
+        let (.., actions) = state.handle_endpoint_result(
+            "boot-1",
+            &request.id,
+            Ok(ResponseResult::PaneNeighbor {
+                neighbor: PaneNeighborResult {
+                    pane_id: "pane_1".into(),
+                    direction: if left {
+                        PaneDirection::Left
+                    } else {
+                        PaneDirection::Right
+                    },
+                    neighbor_pane_id: neighbor_exists.then(|| "pane_4".into()),
+                    layout,
+                },
+            }),
+        );
+        if neighbor_exists {
+            assert!(
+                matches!(actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+                if matches!(&request.method, Method::PaneFocus(target) if target.pane_id == "pane_4"))
+            );
+            continue;
+        }
+        let [ClientShellAction::Endpoint { request, .. }] = actions.as_slice() else {
+            panic!("expected target tab layout request");
+        };
+        assert!(matches!(&request.method, Method::PaneLayout(_)));
+        let target = if left { "pane_3" } else { "pane_2" };
+        let target_tab = if one_tab { "tab_1" } else { "tab_2" };
+        let (_, actions) = state.handle_endpoint_result(
+            "boot-1",
+            &request.id,
+            Ok(ResponseResult::PaneLayout {
+                layout: PaneLayoutSnapshot {
+                    workspace_id: "ws_1".into(),
+                    tab_id: target_tab.into(),
+                    zoomed: false,
+                    area: PaneLayoutRect {
+                        x: 0,
+                        y: 0,
+                        width: 100,
+                        height: 20,
+                    },
+                    focused_pane_id: "pane_2".into(),
+                    splits: Vec::new(),
+                    panes: [("pane_2", 0), ("pane_3", 50)]
+                        .into_iter()
+                        .map(|(id, x)| PaneLayoutPane {
+                            pane_id: id.into(),
+                            focused: false,
+                            rect: PaneLayoutRect {
+                                x,
+                                y: 0,
+                                width: 50,
+                                height: 20,
+                            },
+                        })
+                        .collect(),
+                },
+            }),
+        );
+        assert!(
+            matches!(actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+            if matches!(&request.method, Method::PaneFocus(pane) if pane.pane_id == target))
+        );
+    }
+}
+
+#[test]
+fn pane_or_tab_motion_drops_stale_neighbor_response() {
+    use crate::api::schema::{
+        PaneDirection, PaneLayoutRect, PaneLayoutSnapshot, PaneNeighborResult, ResponseResult,
+    };
+    let mut config = Config::default();
+    config.keys.focus_pane_or_tab_left = crate::config::BindingConfig::one("ctrl+alt+h");
+    let mut state = local_navigation_state(false);
+    state.config.keybinds = ClientShellConfig::from_config(&config).keybinds;
+    let outcome =
+        state.handle_raw_events(vec![RawInputEvent::Key(crate::input::TerminalKey::new(
+            KeyCode::Char('h'),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ))]);
+    let [ClientShellAction::Endpoint { request, .. }] = outcome.actions.as_slice() else {
+        panic!("expected neighbor request");
+    };
+    let mut changed = snapshot();
+    changed.focused_pane_id = Some("pane_other".into());
+    state.set_snapshot(Box::new(changed));
+    let (_, actions) = state.handle_endpoint_result(
+        "boot-1",
+        &request.id,
+        Ok(ResponseResult::PaneNeighbor {
+            neighbor: PaneNeighborResult {
+                pane_id: "pane_1".into(),
+                direction: PaneDirection::Left,
+                neighbor_pane_id: Some("pane_2".into()),
+                layout: PaneLayoutSnapshot {
+                    workspace_id: "ws_1".into(),
+                    tab_id: "tab_1".into(),
+                    zoomed: false,
+                    area: PaneLayoutRect {
+                        x: 0,
+                        y: 0,
+                        width: 100,
+                        height: 20,
+                    },
+                    focused_pane_id: "pane_1".into(),
+                    panes: Vec::new(),
+                    splits: Vec::new(),
+                },
+            },
+        }),
+    );
+    assert!(actions.is_empty());
+}
+
+#[test]
+fn pane_or_tab_motion_rejects_superseded_intent_and_returned_focus() {
+    let mut config = Config::default();
+    config.keys.focus_pane_or_tab_left = crate::config::BindingConfig::one("ctrl+alt+h");
+    config.keys.focus_pane_or_tab_right = crate::config::BindingConfig::one("ctrl+alt+l");
+    let mut state = local_navigation_state(false);
+    state.config.keybinds = ClientShellConfig::from_config(&config).keybinds;
+    let key = |c| {
+        RawInputEvent::Key(crate::input::TerminalKey::new(
+            KeyCode::Char(c),
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+        ))
+    };
+    let first = state.handle_raw_events(vec![key('h')]);
+    let [ClientShellAction::Endpoint { request, .. }] = first.actions.as_slice() else {
+        panic!("expected first request");
+    };
+    let first_id = request.id.clone();
+    state.handle_raw_events(vec![key('l')]);
+    assert!(matches!(state.pending_requests.get(&first_id), Some(_)));
+    assert_ne!(state.pane_or_tab_intent_id, 1);
+    let mut away = snapshot();
+    away.focused_pane_id = Some("pane_other".into());
+    away.revision += 1;
+    state.set_snapshot(Box::new(away));
+    let mut back = snapshot();
+    back.revision += 2;
+    state.set_snapshot(Box::new(back));
+    use crate::api::schema::{
+        PaneDirection, PaneLayoutRect, PaneLayoutSnapshot, PaneNeighborResult, ResponseResult,
+    };
+    let (_, actions) = state.handle_endpoint_result(
+        "boot-1",
+        &first_id,
+        Ok(ResponseResult::PaneNeighbor {
+            neighbor: PaneNeighborResult {
+                pane_id: "pane_1".into(),
+                direction: PaneDirection::Left,
+                neighbor_pane_id: Some("pane_2".into()),
+                layout: PaneLayoutSnapshot {
+                    workspace_id: "ws_1".into(),
+                    tab_id: "tab_1".into(),
+                    zoomed: false,
+                    area: PaneLayoutRect {
+                        x: 0,
+                        y: 0,
+                        width: 100,
+                        height: 20,
+                    },
+                    focused_pane_id: "pane_1".into(),
+                    panes: Vec::new(),
+                    splits: Vec::new(),
+                },
+            },
+        }),
+    );
+    assert!(actions.is_empty());
+}
+
+#[test]
 fn directional_pane_focus_releases_an_accepted_workspace_highlight() {
     use crate::api::schema::{Method, PaneDirection, ResponseResult};
 

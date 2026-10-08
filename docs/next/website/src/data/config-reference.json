@@ -740,6 +740,18 @@
           "description": "Focus the pane to the right."
         },
         {
+          "key": "keys.focus_pane_or_tab_left",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Focus left pane or previous tab at the edge. Unset by default."
+        },
+        {
+          "key": "keys.focus_pane_or_tab_right",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Focus right pane or next tab at the edge. Unset by default."
+        },
+        {
           "key": "keys.swap_pane_left",
           "type": "keybinding",
           "default": "\"prefix+shift+h\"",

@@ -132,3 +132,13 @@ A few `ctrl+alt` chords are taken elsewhere. Avoid these:
 | `ctrl+alt+f1..f12` | Linux virtual console switching |
 
 If a direct chord does nothing, your terminal or desktop environment consumed it before Herdr could see it. Rebind either side: free the chord in the terminal's settings, or pick another chord in Herdr.
+
+For horizontal navigation that continues into the previous or next tab when there is no pane in that direction, opt in with separate bindings:
+
+```toml
+[keys]
+focus_pane_or_tab_left = "prefix+alt+h"
+focus_pane_or_tab_right = "prefix+alt+l"
+```
+
+Within a tab, these focus the neighboring pane. At its edge, they switch tabs and focus an outermost pane; with only one tab, they wrap to that same tab and focus its rightmost pane when moving left or its leftmost pane when moving right. They are unset by default and do not replace `focus_pane_left` or `focus_pane_right`.

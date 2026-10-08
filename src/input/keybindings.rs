@@ -44,6 +44,8 @@ pub(crate) enum KeybindAction {
     FocusPaneDown,
     FocusPaneUp,
     FocusPaneRight,
+    FocusPaneOrTabLeft,
+    FocusPaneOrTabRight,
     SwapPaneLeft,
     SwapPaneDown,
     SwapPaneUp,
@@ -127,6 +129,14 @@ pub(crate) fn resolve_non_indexed_action(
         (&keybinds.focus_pane_down, KeybindAction::FocusPaneDown),
         (&keybinds.focus_pane_up, KeybindAction::FocusPaneUp),
         (&keybinds.focus_pane_right, KeybindAction::FocusPaneRight),
+        (
+            &keybinds.focus_pane_or_tab_left,
+            KeybindAction::FocusPaneOrTabLeft,
+        ),
+        (
+            &keybinds.focus_pane_or_tab_right,
+            KeybindAction::FocusPaneOrTabRight,
+        ),
         (&keybinds.swap_pane_left, KeybindAction::SwapPaneLeft),
         (&keybinds.swap_pane_down, KeybindAction::SwapPaneDown),
         (&keybinds.swap_pane_up, KeybindAction::SwapPaneUp),
