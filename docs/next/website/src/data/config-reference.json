@@ -1054,6 +1054,12 @@
           "description": "Hide the tab row when the workspace has one tab."
         },
         {
+          "key": "ui.show_new_tab_button",
+          "type": "boolean",
+          "default": "true",
+          "description": "Show the mouse-only + control in the tab row. Hiding it reclaims its width without disabling the new-tab keybinding."
+        },
+        {
           "key": "ui.tab_bar_position",
           "type": "enum",
           "default": "\"top\"",

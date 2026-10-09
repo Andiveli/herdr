@@ -45,6 +45,60 @@ fn shell_new_controls_use_the_same_client_action_routes_as_keybinds() {
 }
 
 #[test]
+fn hidden_new_tab_button_keeps_keyboard_creation_available() {
+    assert!(Config::default().ui.show_new_tab_button);
+    let config: Config =
+        toml::from_str("[ui]\nshow_new_tab_button = false\n").expect("hide new tab button config");
+    let mut default_state =
+        ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
+    default_state.set_snapshot(Box::new(snapshot()));
+    default_state.set_pane_surface(surface());
+    default_state
+        .compose(106, 20)
+        .expect("default new-tab button");
+    let old_button = default_state.hits.new_tab;
+    assert!(!old_button.is_empty());
+    let default_binding = default_state.config.keybinds.keybinds.new_tab.label();
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    state.set_pane_surface(surface());
+    let frame = state
+        .compose(106, 20)
+        .expect("tab bar without new tab button");
+    assert!(state.hits.new_tab.is_empty());
+    assert_eq!(
+        state.config.keybinds.keybinds.new_tab.label(),
+        default_binding
+    );
+    let tab_row = state.hits.tabs[0].0.y;
+    let row =
+        &frame.cells[(tab_row * frame.width) as usize..((tab_row + 1) * frame.width) as usize];
+    assert!(row.iter().all(|cell| cell.symbol != "+"));
+    let no_button_click =
+        state.handle_raw_events(vec![RawInputEvent::Mouse(crossterm::event::MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: old_button.x + 1,
+            row: old_button.y,
+            modifiers: KeyModifiers::empty(),
+        })]);
+    assert!(no_button_click.actions.is_empty());
+    assert!(state.overlay.is_none());
+
+    let mut open = ClientShellInput::default();
+    state.record_binding(
+        crate::input::KeybindMatch::Action(crate::input::KeybindAction::NewTab),
+        &mut open,
+    );
+    assert!(matches!(
+        state.overlay,
+        Some(ClientShellOverlay::Rename(ClientRenameOverlay {
+            target: ClientRenameTarget::NewTab { .. },
+            ..
+        }))
+    ));
+}
+
+#[test]
 fn remote_client_preferences_keep_the_same_identity_across_bridge_processes() {
     let first = ClientShellConfig::from_config(&Config::default()).with_endpoint_preferences(
         std::path::Path::new("/tmp/herdr-remote-100-dev-agents.sock"),

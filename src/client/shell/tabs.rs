@@ -1,6 +1,8 @@
 use super::*;
 
 const TAB_SCROLL_BUTTON_WIDTH: u16 = 3;
+// Keep status reservation at the existing threshold; the optional + width is
+// reclaimed within the tab strip without changing unrelated status layout.
 const MIN_TAB_STRIP_WIDTH: u16 =
     MIN_TAB_WIDTH + NEW_TAB_WIDTH + TAB_SCROLL_BUTTON_WIDTH.saturating_mul(2);
 
@@ -30,19 +32,24 @@ pub(crate) fn render_tab_bar(
         .collect::<Vec<_>>();
     let content = tab_bar_content_area(snapshot, area);
     let mouse_chrome = config.mouse_capture;
-    let new_tab_width = if mouse_chrome { NEW_TAB_WIDTH } else { 0 };
+    let new_tab_visible = mouse_chrome && config.show_new_tab_button;
+    let new_tab_width = if new_tab_visible { NEW_TAB_WIDTH } else { 0 };
+    hits.new_tab = Rect::default();
     let desired_total = desired_widths
         .iter()
         .copied()
         .fold(0_u16, u16::saturating_add)
         .saturating_add(tabs.len().saturating_sub(1).min(u16::MAX as usize) as u16)
         .saturating_add(new_tab_width);
+    let min_tab_strip_width = MIN_TAB_WIDTH
+        .saturating_add(new_tab_width)
+        .saturating_add(TAB_SCROLL_BUTTON_WIDTH.saturating_mul(2));
     let overflow =
-        desired_total > content.width && (!mouse_chrome || content.width >= MIN_TAB_STRIP_WIDTH);
+        desired_total > content.width && (!mouse_chrome || content.width >= min_tab_strip_width);
     let available = if overflow && mouse_chrome {
         content
             .width
-            .saturating_sub(NEW_TAB_WIDTH)
+            .saturating_sub(new_tab_width)
             .saturating_sub(TAB_SCROLL_BUTTON_WIDTH.saturating_mul(2))
     } else {
         content.width.saturating_sub(new_tab_width)
@@ -84,7 +91,7 @@ pub(crate) fn render_tab_bar(
         x = hits.tab_scroll_left.right();
         content
             .right()
-            .saturating_sub(NEW_TAB_WIDTH + TAB_SCROLL_BUTTON_WIDTH)
+            .saturating_sub(new_tab_width + TAB_SCROLL_BUTTON_WIDTH)
     } else {
         content.right().saturating_sub(new_tab_width)
     };
@@ -145,16 +152,18 @@ pub(crate) fn render_tab_bar(
                 })
                 .bg(palette.surface0),
         );
-        hits.new_tab = Rect::new(
-            hits.tab_scroll_right.right(),
-            area.y,
-            content
-                .right()
-                .saturating_sub(hits.tab_scroll_right.right())
-                .min(NEW_TAB_WIDTH),
-            1,
-        );
-    } else if mouse_chrome {
+        if new_tab_visible {
+            hits.new_tab = Rect::new(
+                hits.tab_scroll_right.right(),
+                area.y,
+                content
+                    .right()
+                    .saturating_sub(hits.tab_scroll_right.right())
+                    .min(NEW_TAB_WIDTH),
+                1,
+            );
+        }
+    } else if new_tab_visible {
         hits.new_tab = Rect::new(
             x.min(content.right()),
             area.y,
@@ -162,7 +171,7 @@ pub(crate) fn render_tab_bar(
             1,
         );
     }
-    if mouse_chrome {
+    if new_tab_visible {
         put_text(
             buffer,
             hits.new_tab.x,
