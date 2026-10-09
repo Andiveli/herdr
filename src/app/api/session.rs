@@ -99,6 +99,56 @@ mod tests {
     }
 
     #[test]
+    fn session_snapshot_prefers_custom_then_focused_then_root_cwd_for_tab_label() {
+        let mut app = app_with_two_tabs();
+        let root_pane = app.state.workspaces[0].tabs[0].root_pane;
+        let focused_pane =
+            app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        app.state.ensure_test_terminals();
+        let root_terminal = app.state.workspaces[0].tabs[0]
+            .terminal_id(root_pane)
+            .expect("root terminal")
+            .clone();
+        let focused_terminal = app.state.workspaces[0].tabs[0]
+            .terminal_id(focused_pane)
+            .expect("focused terminal")
+            .clone();
+        app.state
+            .terminals
+            .get_mut(&root_terminal)
+            .expect("root state")
+            .cwd = "cwd-root".into();
+        app.state
+            .terminals
+            .get_mut(&focused_terminal)
+            .expect("focused state")
+            .cwd = "cwd-focused".into();
+
+        let first_label = |app: &mut crate::app::App| {
+            let response = app.handle_api_request(crate::api::schema::Request {
+                id: "tab-label".into(),
+                method: Method::SessionSnapshot(EmptyParams::default()),
+            });
+            let success: SuccessResponse =
+                serde_json::from_str(&response).expect("snapshot response");
+            let ResponseResult::SessionSnapshot { snapshot } = success.result else {
+                panic!("expected session snapshot");
+            };
+            snapshot.tabs[0].label.clone()
+        };
+
+        assert_eq!(first_label(&mut app), "cwd-focused");
+        app.state.workspaces[0].tabs[0].set_custom_name("manual".into());
+        assert_eq!(first_label(&mut app), "manual");
+        app.state.workspaces[0].tabs[0].custom_name = None;
+        assert_eq!(first_label(&mut app), "cwd-focused");
+        app.state.terminals.remove(&focused_terminal);
+        assert_eq!(first_label(&mut app), "cwd-root");
+        app.state.terminals.remove(&root_terminal);
+        assert_eq!(first_label(&mut app), "1");
+    }
+
+    #[test]
     fn session_snapshot_bootstraps_runtime_resources() {
         let mut app = app_with_two_tabs();
         let response = app.handle_api_request(crate::api::schema::Request {
