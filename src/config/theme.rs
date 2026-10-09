@@ -103,6 +103,8 @@ pub struct CustomThemeColors {
     pub accent: Option<String>,
     pub panel_bg: Option<String>,
     pub sidebar_bg: Option<String>,
+    pub tab_active_fg: Option<String>,
+    pub tab_inactive_fg: Option<String>,
     pub active_row_bg: Option<String>,
     pub selection_bg: Option<String>,
     pub surface0: Option<String>,
@@ -132,6 +134,8 @@ pub struct ModeThemeColors {
     pub accent: Option<String>,
     pub panel_bg: Option<String>,
     pub sidebar_bg: Option<String>,
+    pub tab_active_fg: Option<String>,
+    pub tab_inactive_fg: Option<String>,
     pub active_row_bg: Option<String>,
     pub selection_bg: Option<String>,
     pub surface0: Option<String>,
@@ -295,6 +299,8 @@ name = "nord"
 [theme.custom]
 panel_bg = "#1e1e2e"
 sidebar_bg = "#181825"
+tab_active_fg = "#112233"
+tab_inactive_fg = "#445566"
 active_row_bg = "#313244"
 selection_bg = "#45475a"
 accent = "#ff79c6"
@@ -305,6 +311,8 @@ red = "rgb(255, 85, 85)"
         let custom = config.theme.custom.as_ref().unwrap();
         assert_eq!(custom.panel_bg.as_deref(), Some("#1e1e2e"));
         assert_eq!(custom.sidebar_bg.as_deref(), Some("#181825"));
+        assert_eq!(custom.tab_active_fg.as_deref(), Some("#112233"));
+        assert_eq!(custom.tab_inactive_fg.as_deref(), Some("#445566"));
         assert_eq!(custom.active_row_bg.as_deref(), Some("#313244"));
         assert_eq!(custom.selection_bg.as_deref(), Some("#45475a"));
         assert_eq!(custom.accent.as_deref(), Some("#ff79c6"));
@@ -320,6 +328,7 @@ accent = "#010203"
 
 [theme.custom.light]
 accent = "#040506"
+tab_active_fg = "#112233"
 text = "#070809"
 selection_bg = "#101112"
 
@@ -333,6 +342,7 @@ active_row_bg = "#131415"
         assert_eq!(custom.accent.as_deref(), Some("#010203"));
         let light = custom.light.as_ref().unwrap();
         assert_eq!(light.accent.as_deref(), Some("#040506"));
+        assert_eq!(light.tab_active_fg.as_deref(), Some("#112233"));
         assert_eq!(light.text.as_deref(), Some("#070809"));
         assert_eq!(light.selection_bg.as_deref(), Some("#101112"));
         let dark = custom.dark.as_ref().unwrap();

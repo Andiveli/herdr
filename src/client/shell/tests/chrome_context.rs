@@ -1,6 +1,53 @@
 use super::*;
 
 #[test]
+fn tab_foreground_colors_keep_the_tab_bar_background() {
+    let customized: Config = toml::from_str(
+        r##"
+[theme.custom]
+tab_active_fg = "#112233"
+tab_inactive_fg = "#445566"
+"##,
+    )
+    .expect("custom tab foreground colors");
+    for (config, active_fg, inactive_fg) in [
+        (
+            Config::default(),
+            crate::app::client_palette_from_config(&Config::default()).text,
+            crate::app::client_palette_from_config(&Config::default()).overlay1,
+        ),
+        (
+            customized,
+            ratatui::style::Color::Rgb(17, 34, 51),
+            ratatui::style::Color::Rgb(68, 85, 102),
+        ),
+    ] {
+        let mut projected = snapshot();
+        let mut inactive = projected.tabs[0].clone();
+        inactive.tab_id = "tab_2".into();
+        inactive.label = "2".into();
+        inactive.focused = false;
+        projected.tabs.push(inactive);
+        let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+        state.set_snapshot(Box::new(projected));
+        state.set_pane_surface(surface());
+        let frame = state.compose(80, 20).expect("two tabs");
+        for (index, symbol, fg) in [(0, "1", active_fg), (1, "2", inactive_fg)] {
+            let rect = state.hits.tabs[index].0;
+            let label_x = rect.x + rect.width.saturating_sub(1) / 2;
+            let cell = &frame.cells[(rect.y * frame.width + label_x) as usize];
+            assert_eq!(cell.symbol, symbol);
+            assert_eq!(cell.fg, crate::protocol::color_to_u32(fg));
+            assert_eq!(
+                cell.bg,
+                crate::protocol::color_to_u32(state.config.palette.panel_bg),
+                "tab text should not paint a separate background"
+            );
+        }
+    }
+}
+
+#[test]
 fn tab_overflow_controls_scroll_the_client_owned_tab_bar() {
     let mut snapshot = snapshot();
     snapshot.tabs.extend((2..=8).map(|number| ClientShellTab {

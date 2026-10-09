@@ -83,6 +83,18 @@
           "description": "Set the desktop sidebar background without changing other panel surfaces. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
         },
         {
+          "key": "theme.custom.tab_active_fg",
+          "type": "color",
+          "default": "unset (theme text)",
+          "description": "Set active tab text color without a separate tab background. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.tab_inactive_fg",
+          "type": "color",
+          "default": "unset (theme overlay1)",
+          "description": "Set inactive tab text color without a separate tab background. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
           "key": "theme.custom.active_row_bg",
           "type": "color",
           "default": "unset",
@@ -197,6 +209,18 @@
           "description": "Override the sidebar_bg color token when auto_switch selects a light appearance. Applied after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
         },
         {
+          "key": "theme.custom.light.tab_active_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override active tab text color for the light appearance after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.light.tab_inactive_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override inactive tab text color for the light appearance after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
           "key": "theme.custom.light.active_row_bg",
           "type": "color",
           "default": "unset",
@@ -309,6 +333,18 @@
           "type": "color",
           "default": "unset",
           "description": "Override the sidebar_bg color token when auto_switch selects a dark appearance. Applied after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.dark.tab_active_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override active tab text color for the dark appearance after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
+        },
+        {
+          "key": "theme.custom.dark.tab_inactive_fg",
+          "type": "color",
+          "default": "unset",
+          "description": "Override inactive tab text color for the dark appearance after theme.custom. Accepts hex, named colors, rgb(r,g,b), or reset aliases."
         },
         {
           "key": "theme.custom.dark.active_row_bg",

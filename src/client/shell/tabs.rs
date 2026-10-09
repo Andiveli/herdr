@@ -101,18 +101,14 @@ pub(crate) fn render_tab_bar(
         }
         let rect = Rect::new(x, area.y, width, 1);
         let style = if tab.focused {
-            let base = Style::default()
-                .fg(panel_contrast_fg(palette))
-                .bg(palette.accent);
+            let base = Style::default().fg(palette.tab_active_fg.unwrap_or(palette.text));
             if tab.custom_label {
                 base.add_modifier(Modifier::BOLD)
             } else {
                 base
             }
-        } else if tab.custom_label {
-            Style::default().fg(palette.overlay1).bg(palette.surface0)
         } else {
-            Style::default().fg(palette.overlay0).bg(palette.surface0)
+            Style::default().fg(palette.tab_inactive_fg.unwrap_or(palette.overlay1))
         };
         let padding = width.saturating_sub(display_width(&name));
         let left = padding / 2;

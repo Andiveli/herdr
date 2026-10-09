@@ -87,6 +87,8 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Accepts: hex (#rrggbb), named colors, rgb(r,g,b), or panel_bg = "reset"
 # [theme.custom]
 # sidebar_bg = "#181825"
+# tab_active_fg = "#cdd6f4"   # active tab text; no separate tab background
+# tab_inactive_fg = "#7f849c" # inactive tab text
 # active_row_bg = "#1e1e2e"
 # selection_bg = "#313244"
 # panel_bg = "reset"
