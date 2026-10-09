@@ -1041,7 +1041,7 @@ fn pane_or_tab_motion_rejects_superseded_intent_and_returned_focus() {
     };
     let first_id = request.id.clone();
     state.handle_raw_events(vec![key('l')]);
-    assert!(matches!(state.pending_requests.get(&first_id), Some(_)));
+    assert!(state.pending_requests.get(&first_id).is_some());
     assert_ne!(state.pane_or_tab_intent_id, 1);
     let mut away = snapshot();
     away.focused_pane_id = Some("pane_other".into());
