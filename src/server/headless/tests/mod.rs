@@ -808,9 +808,17 @@ async fn completion_guard_endpoint_pairs_runtime_completions_with_snapshots() {
 #[tokio::test]
 async fn client_shell_endpoint_request_uses_the_selected_connection() {
     let mut server = test_headless_server();
-    server.app.state.workspaces = vec![crate::workspace::Workspace::test_new("endpoint")];
+    let mut workspace = crate::workspace::Workspace::test_new("endpoint");
+    let second_tab = workspace.test_add_tab(Some("second"));
+    let second_pane = workspace.tabs[second_tab].root_pane;
+    server.app.state.workspaces = vec![workspace];
     server.app.state.ensure_test_terminals();
     server.app.state.active = Some(0);
+    let second_pane_id = server
+        .app
+        .public_pane_id(0, second_pane)
+        .expect("second pane");
+    let second_tab_id = server.app.public_tab_id(0, second_tab).expect("second tab");
     let (writer, control_rx, _render_rx) = test_client_writer();
     let client_id = 41;
     assert!(
@@ -894,6 +902,91 @@ async fn client_shell_endpoint_request_uses_the_selected_connection() {
         }
         other => panic!("expected client shell endpoint response, got {other:?}"),
     }
+    let pane_id = _initial_snapshot
+        .focused_pane_id
+        .as_deref()
+        .expect("focused pane")
+        .to_owned();
+    for (request_id, method) in [
+        (
+            "client-shell:neighbor",
+            api::schema::Method::PaneNeighbor(api::schema::PaneNeighborParams {
+                pane_id: Some(pane_id.clone()),
+                direction: api::schema::PaneDirection::Left,
+            }),
+        ),
+        (
+            "client-shell:layout",
+            api::schema::Method::PaneLayout(api::schema::PaneLayoutParams {
+                pane_id: Some(second_pane_id.clone()),
+            }),
+        ),
+    ] {
+        assert!(
+            !server.handle_server_event(ServerEvent::ClientShellEndpointRequest {
+                client_id,
+                boot_id: boot_id.clone(),
+                request: Box::new(api::schema::Request {
+                    id: request_id.into(),
+                    method,
+                }),
+            })
+        );
+        let response_ready = server
+            .server_event_rx
+            .recv()
+            .await
+            .expect("motion query endpoint response ready");
+        assert!(!server.handle_server_event(response_ready));
+        let ServerMessage::ClientShellEndpointResponseChunk { data, .. } =
+            read_server_message(control_rx.recv().expect("motion query response"))
+        else {
+            panic!("expected motion query endpoint response");
+        };
+        let response = serde_json::from_slice::<api::schema::SuccessResponse>(&data)
+            .expect("typed motion query response");
+        assert_eq!(response.id, request_id);
+        match (request_id, response.result) {
+            ("client-shell:neighbor", api::schema::ResponseResult::PaneNeighbor { neighbor }) => {
+                assert_eq!(neighbor.pane_id, pane_id);
+                assert_eq!(neighbor.direction, api::schema::PaneDirection::Left);
+                assert_eq!(neighbor.neighbor_pane_id, None);
+                assert_eq!(neighbor.layout.focused_pane_id, pane_id);
+                assert_eq!(neighbor.layout.panes.len(), 1);
+                assert_eq!(neighbor.layout.panes[0].pane_id, pane_id);
+            }
+            ("client-shell:layout", api::schema::ResponseResult::PaneLayout { layout }) => {
+                assert_eq!(layout.tab_id, second_tab_id);
+                assert_eq!(layout.focused_pane_id, second_pane_id);
+                assert_eq!(layout.panes.len(), 1);
+                assert_eq!(layout.panes[0].pane_id, second_pane_id);
+            }
+            (_, other) => panic!("unexpected motion query result: {other:?}"),
+        }
+    }
+    assert!(
+        !server.handle_server_event(ServerEvent::ClientShellEndpointRequest {
+            client_id,
+            boot_id: boot_id.clone(),
+            request: Box::new(api::schema::Request {
+                id: "client-shell:unsupported".into(),
+                method: api::schema::Method::PaneEdges(api::schema::PaneEdgesParams {
+                    pane_id: Some(pane_id.clone()),
+                }),
+            }),
+        })
+    );
+    let ServerMessage::ClientShellEndpointResponseChunk { data, .. } =
+        read_server_message(control_rx.recv().expect("unsupported endpoint response"))
+    else {
+        panic!("expected unsupported endpoint response");
+    };
+    let response = serde_json::from_slice::<api::schema::ErrorResponse>(&data)
+        .expect("typed unsupported response");
+    assert_eq!(response.id, "client-shell:unsupported");
+    assert_eq!(response.error.code, "unsupported_endpoint_command");
+    assert!(!server.clients[&client_id].shell_endpoint_command_in_flight);
+    assert_eq!(server.app.state.workspaces[0].active_tab, 0);
     shutdown_test_runtimes(&mut server);
 }
 

@@ -26,8 +26,10 @@ const CLIENT_SHELL_METHODS: &[&str] = &[
     "pane.focus",
     "pane.focus_direction",
     "pane.input.set",
+    "pane.layout",
     "pane.link.activate",
     "pane.link.resolve",
+    "pane.neighbor",
     "pane.rename",
     "pane.resize",
     "pane.scroll",
@@ -294,8 +296,16 @@ mod tests {
             Some("0301d288ba198ddaa427dd7421c71911cccaf4ea03544531efa8b67ca21b08f6")
         );
         assert_eq!(
+            actual.remove("pane.layout").as_deref(),
+            Some("340649f33eb5dd87e8bdb64932ae9217a276cf312c800dd6519d488d86bf39ab")
+        );
+        assert_eq!(
             actual.remove("pane.link.resolve").as_deref(),
             Some("f5e4a3e01453ae7b188f127ce951c12c20e0bebcc17cc364eeb6d1a01fd5bf81")
+        );
+        assert_eq!(
+            actual.remove("pane.neighbor").as_deref(),
+            Some("171c63e655968b0f0e0cb3fb8b823f6dde675a6239a47df1002c5a5a8c0015c1")
         );
 
         assert_eq!(
@@ -378,6 +388,26 @@ mod tests {
         )));
         assert!(!supports_client_shell_method(&Method::ServerStop(
             crate::api::schema::EmptyParams::default(),
+        )));
+    }
+
+    #[test]
+    fn client_shell_lane_supports_pane_or_tab_motion_queries() {
+        assert!(supports_client_shell_method(&Method::PaneNeighbor(
+            crate::api::schema::PaneNeighborParams {
+                pane_id: Some("w1:p1".into()),
+                direction: crate::api::schema::PaneDirection::Left,
+            },
+        )));
+        assert!(supports_client_shell_method(&Method::PaneLayout(
+            crate::api::schema::PaneLayoutParams {
+                pane_id: Some("w1:p1".into()),
+            },
+        )));
+        assert!(supports_client_shell_method(&Method::PaneFocus(
+            crate::api::schema::PaneTarget {
+                pane_id: "w1:p1".into(),
+            },
         )));
     }
 
