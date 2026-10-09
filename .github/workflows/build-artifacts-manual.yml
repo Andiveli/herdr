@@ -1,4 +1,5 @@
 name: Build artifacts (manual)
+# Keep this workflow on the fork's default branch to register manual dispatch for release refs.
 
 on:
   workflow_dispatch:
