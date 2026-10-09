@@ -27,6 +27,38 @@ describe("official publishing workflow boundaries", () => {
     expect(preview.jobs.publish.needs).toContain("build");
   });
 
+  test("manual artifacts require Linux checks before any platform build", () => {
+    const manual = load("build-artifacts-manual");
+    const verify = manual.jobs["verify-linux"];
+    expect(verify["runs-on"]).toBe("ubuntu-latest");
+    expect(verify.steps.some((step: any) => step.uses?.startsWith("actions/checkout@"))).toBe(true);
+    expect(verify.steps.some((step: any) => step.uses?.startsWith("dtolnay/rust-toolchain@"))).toBe(true);
+    expect(verify.steps.some((step: any) => step.uses?.startsWith("taiki-e/install-action@"))).toBe(true);
+    expect(verify.steps.some((step: any) => step.uses?.startsWith("oven-sh/setup-bun@"))).toBe(true);
+    expect(verify.steps.some((step: any) => step.uses?.startsWith("vercel-labs/setup-zig@"))).toBe(true);
+    expect(verify.steps.filter((step: any) => step.run).map((step: any) => step.run.trim())).toContain("CARGO_INCREMENTAL=1 just ci");
+    expect(verify.steps.filter((step: any) => step.run).map((step: any) => step.run.trim())).toContain("just docs-contract-test");
+    expect(verify["continue-on-error"] ?? false).toBe(false);
+    for (const step of verify.steps) {
+      expect(step["continue-on-error"] ?? false).toBe(false);
+    }
+    for (const platform of ["linux", "macos", "windows"]) {
+      const build = manual.jobs[`build-${platform}`];
+      expect(build.needs).toBe("verify-linux");
+      expect(build.if).not.toContain("always()");
+      expect(build["continue-on-error"] ?? false).toBe(false);
+    }
+  });
+
+  test("manual artifact selection still retains every existing build group", () => {
+    const manual = load("build-artifacts-manual");
+    expect(manual.on.workflow_dispatch.inputs.build_group.options).toEqual(["linux", "macos", "windows", "all"]);
+    for (const platform of ["linux", "macos", "windows"]) {
+      expect(manual.jobs[`build-${platform}`].if).toContain(`inputs.build_group == '${platform}'`);
+      expect(manual.jobs[`build-${platform}`].if).toContain("inputs.build_group == 'all'");
+    }
+  });
+
   test("each publishing job rechecks both actors before using credentials", () => {
     for (const [workflow, names] of [
       [preview, ["preflight", "publish"]],
