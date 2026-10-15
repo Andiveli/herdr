@@ -11,6 +11,7 @@ const AGENT = "opencode";
 let reportSeq = Date.now() * 1000;
 let requestChain = Promise.resolve();
 let reportedRootSessionID;
+let reportedRootState;
 
 // Track child sessions so their events cannot replace the pane's root session.
 // User prompts carry the root id to preserve its identity and cross-talk guard.
@@ -113,6 +114,7 @@ function reportState(state, sessionID) {
   const params = { state };
   if (sessionID) {
     reportedRootSessionID = sessionID;
+    reportedRootState = state;
     params.agent_session_id = sessionID;
   }
   return request("pane.report_agent", params);
@@ -146,8 +148,18 @@ export const HerdrAgentStatePlugin = async () => {
     "chat.message": async ({ sessionID }) => {
       if (sessionID && childSessions.has(sessionID)) {
         // A child prompt is still active work in this pane. Do not attach the
-        // child session, but do clear a blocked state left by its question.
-        await reportState("working");
+        // child session; only reassert its root if this pane already owns it.
+        let rootSessionID = sessionID;
+        while (childSessions.has(rootSessionID)) {
+          rootSessionID = childSessions.get(rootSessionID);
+        }
+        if (reportedRootSessionID === rootSessionID) {
+          if (reportedRootState !== "working") {
+            await reportState("working", rootSessionID);
+          }
+        } else {
+          await reportState("working");
+        }
         return;
       }
       await reportState("working", sessionID);
