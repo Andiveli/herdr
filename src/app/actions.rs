@@ -570,34 +570,6 @@ impl AppState {
         true
     }
 
-    #[cfg(test)]
-    pub fn next_tab(&mut self) {
-        if let Some(ws) = self.active.and_then(|i| self.workspaces.get(i)) {
-            if !ws.tabs.is_empty() {
-                let next = (ws.active_tab + 1) % ws.tabs.len();
-                if let Some(ws_idx) = self.active {
-                    self.switch_workspace_tab(ws_idx, next);
-                }
-            }
-        }
-    }
-
-    #[cfg(test)]
-    pub fn previous_tab(&mut self) {
-        if let Some(ws) = self.active.and_then(|i| self.workspaces.get(i)) {
-            if !ws.tabs.is_empty() {
-                let prev = if ws.active_tab == 0 {
-                    ws.tabs.len() - 1
-                } else {
-                    ws.active_tab - 1
-                };
-                if let Some(ws_idx) = self.active {
-                    self.switch_workspace_tab(ws_idx, prev);
-                }
-            }
-        }
-    }
-
     pub(crate) fn terminal_ids_for_workspace(
         &self,
         ws_idx: usize,
@@ -783,35 +755,6 @@ impl AppState {
             if let Some(target) = find_in_direction(focused, direction, &panes) {
                 self.focus_pane_in_workspace(ws_idx, target);
             }
-        }
-    }
-
-    /// Zellij-style horizontal nav: move between panes in the active tab, then cycle tabs at the edge.
-    #[cfg(test)]
-    pub fn navigate_pane_or_tab_horizontal(&mut self, direction: NavDirection) {
-        let Some(ws_idx) = self.active else {
-            return;
-        };
-        let Some(tab) = self.workspaces.get(ws_idx).and_then(|ws| ws.active_tab()) else {
-            return;
-        };
-        let panes = if tab.zoomed {
-            tab.layout.panes(self.view.terminal_area)
-        } else {
-            self.view.pane_infos.clone()
-        };
-
-        if let Some(focused) = panes.iter().find(|p| p.is_focused) {
-            if let Some(target) = find_in_direction(focused, direction, &panes) {
-                self.focus_pane_in_workspace(ws_idx, target);
-                return;
-            }
-        }
-
-        match direction {
-            NavDirection::Left => self.previous_tab(),
-            NavDirection::Right => self.next_tab(),
-            _ => {}
         }
     }
 
