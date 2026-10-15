@@ -157,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn pane_details_prefers_agent_name_over_detected_agent_label() {
+    fn pane_details_keeps_detected_kind_with_custom_agent_name() {
         let ws = Workspace::test_new("test");
         let root_pane = ws.tabs[0].root_pane;
         let mut terminals = HashMap::new();
@@ -168,7 +168,7 @@ mod tests {
 
         let details = ws.pane_details(&terminals);
         assert_eq!(details.len(), 1);
-        assert_eq!(details[0].agent_kind_label.as_deref(), Some("planner"));
+        assert_eq!(details[0].agent_kind_label.as_deref(), Some("pi"));
         assert_eq!(details[0].tab_idx, 0);
     }
 

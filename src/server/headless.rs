@@ -426,6 +426,11 @@ impl HeadlessServer {
                 let _ = quit_notify.try_send(ServerEvent::QuitSignal);
             },
         );
+        info!(
+            api_socket = %api::socket_path().display(),
+            client_socket = %client_socket_path().display(),
+            "herdr server started"
+        );
 
         let mut needs_render = true;
         let mut needs_full_render = true;
