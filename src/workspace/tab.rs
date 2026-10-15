@@ -214,8 +214,8 @@ impl Tab {
         if let Some(name) = &self.custom_name {
             return name.clone();
         }
-        let pane_id = self.layout.focused();
-        if let Some(cwd) = self.cwd_for_pane(pane_id, terminals, terminal_runtimes) {
+        let focused_pane = self.layout.focused();
+        if let Some(cwd) = self.cwd_for_pane(focused_pane, terminals, terminal_runtimes) {
             return super::derive_label_from_cwd(&cwd);
         }
         if let Some(cwd) = self.cwd_for_pane(self.root_pane, terminals, terminal_runtimes) {

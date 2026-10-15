@@ -32,11 +32,13 @@ impl TextCommit {
     }
 }
 
+#[cfg(any(windows, test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PhysicalKeyId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeyIdentity {
+    #[cfg(any(windows, test))]
     Physical(PhysicalKeyId),
     Semantic(KeyCode),
 }
@@ -47,12 +49,14 @@ pub(crate) enum KeySource {
     Vt {
         bytes: Vec<u8>,
     },
+    #[cfg(any(windows, test))]
     WindowsConsole {
         record: WindowsKeyRecord,
         physical_key: Option<PhysicalKeyId>,
     },
 }
 
+#[cfg(any(windows, test))]
 impl WindowsKeyRecord {
     fn physical_key_id(self) -> Option<PhysicalKeyId> {
         const ENHANCED_KEY: u32 = 0x0100;
@@ -73,6 +77,12 @@ pub struct TerminalKey {
     pub repeat_count: u16,
     pub shifted_codepoint: Option<u32>,
     pub generated_text: Option<String>,
+    physical_identity_hint: bool,
+    windows_dead_key: bool,
+    /// The base-layout (physical) key a Kitty host named for this key. Client
+    /// side only: it pairs releases whose layout character differs from the
+    /// press (Ctrl let go first on a non-Latin layout).
+    base_layout_key: Option<char>,
     source: KeySource,
 }
 
@@ -85,8 +95,20 @@ impl TerminalKey {
             repeat_count: 1,
             shifted_codepoint: None,
             generated_text: None,
+            physical_identity_hint: false,
+            windows_dead_key: false,
+            base_layout_key: None,
             source: KeySource::Synthesized,
         }
+    }
+
+    pub(crate) fn with_base_layout_key(mut self, key: Option<char>) -> Self {
+        self.base_layout_key = key;
+        self
+    }
+
+    pub(crate) fn base_layout_key(&self) -> Option<char> {
+        self.base_layout_key
     }
 
     pub fn with_kind(mut self, kind: crossterm::event::KeyEventKind) -> Self {
@@ -112,7 +134,6 @@ impl TerminalKey {
         self
     }
 
-    #[allow(dead_code)] // Reserved for the upcoming raw input parser to preserve shifted/base key pairs.
     pub fn with_shifted_codepoint(mut self, shifted_codepoint: u32) -> Self {
         self.shifted_codepoint = Some(shifted_codepoint);
         self
@@ -132,57 +153,93 @@ impl TerminalKey {
         self
     }
 
+    #[cfg(any(windows, test))]
     pub fn with_windows_record(mut self, record: WindowsKeyRecord) -> Self {
+        self = self.with_windows_composition_hint(Some(record));
         self.repeat_count = if self.kind == crossterm::event::KeyEventKind::Release {
             1
         } else {
             record.repeat_count.max(1)
         };
+        let physical_key = record.physical_key_id();
+        self.physical_identity_hint = physical_key.is_some();
         self.source = KeySource::WindowsConsole {
-            physical_key: record.physical_key_id(),
+            physical_key,
             record,
         };
         self
     }
 
-    #[cfg(any(windows, test))]
+    pub(crate) fn with_windows_composition_hint(
+        mut self,
+        record: Option<WindowsKeyRecord>,
+    ) -> Self {
+        // AltGr is normalized to text-only modifiers by the Windows input mapper.
+        // Command chords can also have zero Unicode, so retain their fallback keys.
+        self.windows_dead_key = matches!(self.code, KeyCode::Char(_))
+            && self.modifiers.difference(KeyModifiers::SHIFT).is_empty()
+            && record.is_some_and(|record| record.unicode == 0);
+        self
+    }
+
+    pub(crate) fn with_physical_identity_hint(mut self, physical: bool) -> Self {
+        self.physical_identity_hint = physical;
+        self
+    }
+
     pub(crate) fn vt_bytes(&self) -> Option<&[u8]> {
         match &self.source {
             KeySource::Vt { bytes } => Some(bytes),
-            KeySource::Synthesized | KeySource::WindowsConsole { .. } => None,
+            _ => None,
         }
     }
 
-    #[cfg(any(windows, test))]
     pub(crate) fn windows_record(&self) -> Option<WindowsKeyRecord> {
+        #[cfg(any(windows, test))]
         match self.source {
             KeySource::WindowsConsole { record, .. } => Some(record),
             KeySource::Synthesized | KeySource::Vt { .. } => None,
         }
+        #[cfg(not(any(windows, test)))]
+        None
+    }
+
+    pub(crate) fn is_windows_dead_key(&self) -> bool {
+        self.windows_dead_key
     }
 
     pub(crate) fn identity(&self) -> KeyIdentity {
         match self.source {
+            #[cfg(any(windows, test))]
             KeySource::WindowsConsole {
                 physical_key: Some(physical_key),
                 ..
             } => KeyIdentity::Physical(physical_key),
+            #[cfg(any(windows, test))]
             KeySource::WindowsConsole {
                 physical_key: None, ..
-            }
-            | KeySource::Synthesized
-            | KeySource::Vt { .. } => KeyIdentity::Semantic(self.code),
+            } => KeyIdentity::Semantic(self.code),
+            KeySource::Synthesized | KeySource::Vt { .. } => KeyIdentity::Semantic(self.code),
         }
     }
 
     pub(crate) fn has_physical_identity(&self) -> bool {
-        matches!(
-            self.source,
+        self.physical_identity_hint || self.physical_key_id().is_some()
+    }
+
+    pub(crate) fn physical_key_id(&self) -> Option<u32> {
+        match &self.source {
+            #[cfg(any(windows, test))]
             KeySource::WindowsConsole {
-                physical_key: Some(_),
+                physical_key: Some(PhysicalKeyId(id)),
                 ..
-            }
-        )
+            } => Some(*id),
+            #[cfg(any(windows, test))]
+            KeySource::WindowsConsole {
+                physical_key: None, ..
+            } => None,
+            KeySource::Synthesized | KeySource::Vt { .. } => None,
+        }
     }
 
     pub fn with_text_commit(mut self) -> Self {
@@ -314,6 +371,7 @@ impl MouseProtocolMode {
     }
 }
 
+#[cfg(any(unix, test))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MouseProtocolEncoding {
@@ -378,6 +436,46 @@ mod tests {
             Some(true)
         );
         assert_eq!(key.repeat_count, 1);
+    }
+
+    #[test]
+    fn windows_composition_hint_requires_uncommitted_text_not_a_command() {
+        let record = WindowsKeyRecord {
+            key_down: true,
+            repeat_count: 1,
+            virtual_key_code: 52,
+            virtual_scan_code: 5,
+            unicode: 0,
+            control_key_state: 9,
+        };
+        for modifiers in [
+            KeyModifiers::CONTROL,
+            KeyModifiers::ALT,
+            KeyModifiers::CONTROL | KeyModifiers::ALT,
+            KeyModifiers::SUPER,
+        ] {
+            let key = TerminalKey::new(KeyCode::Char('4'), modifiers)
+                .with_windows_composition_hint(Some(record));
+            assert!(
+                !key.is_windows_dead_key(),
+                "command modifiers: {modifiers:?}"
+            );
+        }
+        for (code, source) in [
+            (KeyCode::Left, Some(record)),
+            (KeyCode::Char('4'), None),
+            (
+                KeyCode::Char('~'),
+                Some(WindowsKeyRecord {
+                    unicode: 126,
+                    ..record
+                }),
+            ),
+        ] {
+            let key =
+                TerminalKey::new(code, KeyModifiers::empty()).with_windows_composition_hint(source);
+            assert!(!key.is_windows_dead_key(), "{code:?}, {source:?}");
+        }
     }
 
     #[test]
