@@ -1,6 +1,6 @@
 # Sync personal fork with upstream
 Target: `samael/personal` in `Andiveli/herdr`; retain remote history and navigation release branch changes.
-Working branch: `integration/personal-upstream-20261014`; do not publish without a separate decision. Current merge is paused at conflicts pending scope choice.
+Working branch: `integration/personal-upstream-20261014`; do not publish without a separate decision. Both merges are committed locally; remote publication is pending authorization.
 
 ## Specs
 S1. "Okay, ahora vamos a actualizar mi fork a upstream conservando los cambios hechos"
@@ -8,7 +8,7 @@ S2. "samael/personal" (selected target); preserve both its own changes and those
 
 ## Tasks
 T1 [S1-S2] Integrate the two fork lines and current upstream into an isolated branch; route: three disjoint conflict workers + parent merge; commits: first merge `f2e5cdb5`, upstream merge `34e71d10`.
-T2 [S1-S2] Verify preserved behaviors, release workflow, and integration result; route: parent + independent verifier; commit: pending.
+T2 [S1-S2] Verify preserved behaviors, release workflow, and integration result; route: parent + independent verifier; commits: OpenCode fix `f1444bee`, docs/test repair pending.
 
 ## Log
 L1. "Okay, ahora vamos a actualizar mi fork a upstream conservando los cambios hechos"
@@ -21,4 +21,6 @@ L7. User selected "Conservar comportamiento sobre Kitty nativo (recomendado)" ra
 L8. User clarified: "Quiero todo lo que tiene upstream + mis cambios, no conservar nada viejo". Use modern upstream behavior and architecture, avoid stale modules and settings; preserve applicable fork customizations.
 L9. RED: `cargo check --locked` failed with 90 compile errors dominated by duplicate `tab_active_fg`/`tab_inactive_fg` fields and optional-color initializers in `src/app/state.rs` and duplicated fields in `src/config/theme.rs` (exit 101). A second RED had 6 type errors from retaining the legacy concrete `Color`; modern `Option<Color>` palette fields and defaults were restored. GREEN: third `cargo check --locked` exited 0. Removed unused legacy `show_tab_bar_new_tab_button` and `pane_history_persistence` AppState fields, retaining the effective `show_new_tab_button` shell option and `persist_pane_history` runtime setting. Latest `cargo check --locked` exited 0; subsequent `cargo fmt --check` failed on one blank line in `src/app/actions.rs`. `cargo fmt` command timed out after 30s (failure), but readback confirms that one blank line was removed. First history-preserving merge committed as `f2e5cdb5`.
 L10. Merged upstream/master at `916fcf8d` and committed `34e71d10`; two conflicts were resolved: keep fork pane-or-tab item under Unreleased while retaining v0.9.4/0.9.5 notes, and use upstream's centralized shell method catalog while setting `pane.layout` and fork `pane.neighbor` as client-shell methods. `cargo check --locked && cargo fmt --check` exited 0 (GREEN).
-L11. RED: `bun test src/integration/assets/opencode/herdr-agent-state.test.ts` exited 1 (9 pass, 1 fail) for redundant nested-child working report. Fixed root-state reassertion without attaching an unproven root. GREEN: same test rerun exited 0 (10 pass, 0 fail, 40 assertions). `just docs-contract-test` exited 0 (7 pass, 0 fail). Focused Rust tests still running.
+L11. RED: `bun test src/integration/assets/opencode/herdr-agent-state.test.ts` exited 1 (9 pass, 1 fail) for redundant nested-child working report. Fixed root-state reassertion without attaching an unproven root. GREEN: same test rerun exited 0 (10 pass, 0 fail, 40 assertions). `just docs-contract-test` exited 0 (7 pass, 0 fail); `bun test scripts/release-workflows.test.ts` exited 0 (7 pass, 0 fail). OpenCode fix committed as `f1444bee`.
+L12. Independent verifier confirmed complete ancestry and modern Kitty-native implementation, but found 4 duplicate tab foreground keys in `docs/next/website/src/data/config-reference.json` that block CI maintenance tests. RED: `python3 -m unittest scripts.test_config_reference_check.RealModelTests.test_preview_reference_matches_real_config_model` exited 1 with exactly 4 duplicate errors. Removed later entries. GREEN: same test exited 0; full `python3 -m unittest scripts.test_config_reference_check` exited 0 (14 tests), JSON parses.
+L13. RED: `cargo test --locked pane_or_tab_motion` exited 101 while compiling a legacy restore test using two `pane_details` arguments. Updated `src/persist/restore.rs` test to current one-argument API; GREEN: focused Rust suite exited 0 (`pane_or_tab_motion` 4, `kitty_graphics` 49, `client_shell_lane` 2, operation catalog 1; 8 matching integration tests); direct restored-pane regression exited 0 (1 test); `cargo fmt --check` exited 0. Independent verification did not exercise a live runtime. No push yet.

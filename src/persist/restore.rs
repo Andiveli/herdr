@@ -1774,7 +1774,7 @@ mod tests {
         };
         let (events, _event_rx) = mpsc::channel(4);
 
-        let (workspaces, terminals, runtimes) = restore(
+        let (workspaces, terminals, _runtimes) = restore(
             &snapshot,
             None,
             24,
@@ -1796,10 +1796,7 @@ mod tests {
         assert!(terminals[terminal_id].agent_name.is_none());
         assert_eq!(terminals[terminal_id].managed_agent_kind(), None);
         assert!(workspace
-            .pane_details(
-                &terminals,
-                &crate::terminal::TerminalRuntimeRegistry::from(runtimes)
-            )
+            .pane_details(&terminals)
             .into_iter()
             .all(|detail| detail.pane_id != agent_pane));
     }
